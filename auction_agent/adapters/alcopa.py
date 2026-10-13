@@ -148,6 +148,9 @@ def parse_card(card: Tag) -> Optional[LotStub]:
     if link is None or not link.get("href"):
         return None
     detail_url = urljoin(BASE_URL, str(link["href"]))
+    parts = urlsplit(detail_url)
+    if parts.scheme not in ("http", "https") or not parts.netloc.endswith("alcopa-auction.fr"):
+        raise ParseError(f"Unexpected lot link {detail_url!r}")
     ident = product_id_from_url(detail_url)
     if ident is None:
         raise ParseError(f"No product id in {detail_url}")

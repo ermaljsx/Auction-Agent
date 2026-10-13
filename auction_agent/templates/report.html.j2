@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Auction-Agent — Sélection de la semaine</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --ink:#18202b; --muted:#5b6675; --line:#e2e6eb;
+          --green:#0f7b4b; --green-bg:#e3f4ea; --yellow:#8a5a00; --yellow-bg:#fdf1d6;
+          --red:#a3242b; --red-bg:#fbe5e6; --accent:#1d4f91; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#12161c; --card:#1b2129; --ink:#e7ebf0; --muted:#9aa6b4; --line:#2c3440;
+            --green:#5fd39b; --green-bg:#173528; --yellow:#f0c35a; --yellow-bg:#3a2f12;
+            --red:#ff8a90; --red-bg:#3d1c1f; --accent:#8db8ff; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--ink); }
+  main { max-width:1080px; margin:0 auto; padding:24px 16px 48px; }
+  header h1 { margin:0 0 4px; font-size:24px; }
+  header p, .muted { color:var(--muted); margin:0; }
+  .summary { display:flex; flex-wrap:wrap; gap:8px; margin:16px 0 24px; }
+  .chip { border:1px solid var(--line); background:var(--card); border-radius:999px; padding:4px 12px; font-size:13px; }
+  h2 { font-size:18px; margin:28px 0 12px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:14px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; display:flex; flex-direction:column; gap:10px; }
+  .card.green { border-left:5px solid var(--green); } .card.yellow { border-left:5px solid var(--yellow); } .card.red { border-left:5px solid var(--red); }
+  .head { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; }
+  .head h3 { margin:0; font-size:16px; }
+  .score { font-size:22px; font-weight:700; min-width:56px; text-align:right; }
+  .tier { display:inline-block; font-size:12px; font-weight:600; padding:2px 8px; border-radius:6px; }
+  .tier.green { color:var(--green); background:var(--green-bg); } .tier.yellow { color:var(--yellow); background:var(--yellow-bg); } .tier.red { color:var(--red); background:var(--red-bg); }
+  .pill { display:inline-block; font-size:12px; padding:2px 8px; border-radius:6px; border:1px solid var(--line); color:var(--muted); }
+  .specs { display:flex; flex-wrap:wrap; gap:4px 14px; font-size:13px; color:var(--muted); }
+  .price { font-weight:600; color:var(--ink); }
+  .pillars { display:flex; gap:12px; font-size:12px; color:var(--muted); }
+  ul { margin:0; padding-left:18px; font-size:13px; }
+  .src { color:var(--muted); font-size:11px; }
+  .verdict { font-size:13px; background:var(--bg); border-radius:8px; padding:8px 10px; }
+  a { color:var(--accent); }
+  footer { margin-top:32px; font-size:12px; color:var(--muted); }
+</style>
+</head>
+<body>
+<main>
+<header>
+  <h1>Sélection de la semaine</h1>
+  <p>Généré le {{ generated_at }} · profil acheteur : {{ buyer }}{% if max_price %} · budget max {{ max_price|eur }}{% endif %}</p>
+</header>
+
+<div class="summary">
+  <span class="chip">{{ total }} véhicules notés</span>
+  <span class="chip">🟢 {{ counts.green }}</span>
+  <span class="chip">🟡 {{ counts.yellow }}</span>
+  <span class="chip">🔴 {{ counts.red }}</span>
+  {% if partial %}<span class="chip">{{ partial }} avec données incomplètes</span>{% endif %}
+</div>
+
+{% macro card(c) %}
+<article class="card {{ c.tier }}">
+  <div class="head">
+    <div>
+      <h3>{{ c.title }}</h3>
+      {% if c.trim %}<div class="muted">{{ c.trim }}</div>{% endif %}
+    </div>
+    <div class="score" title="Score sur 100">{{ c.score }}</div>
+  </div>
+  <div>
+    <span class="tier {{ c.tier }}">{{ c.tier_label }}</span>
+    {% if c.super_deal %}<span class="pill">Super affaire</span>{% endif %}
+    {% if c.confidence == 'partial' %}<span class="pill">Données incomplètes</span>{% endif %}
+  </div>
+  <div class="specs">
+    <span>{{ c.year if c.year else '—' }}</span>
+    <span>{{ c.mileage|int(' km') }}</span>
+    {% if c.fuel %}<span>{{ c.fuel }}</span>{% endif %}
+    {% if c.gearbox %}<span>{{ c.gearbox }}</span>{% endif %}
+    <span class="price" title="Estimation frais acheteur inclus">{{ c.effective_price|eur }}</span>
+    {% if c.sale_date %}<span>Vente du {{ c.sale_date }}{% if c.room %} · {{ c.room }}{% endif %}</span>{% endif %}
+    {% if c.lot %}<span>Lot {{ c.lot }}</span>{% endif %}
+    {% if c.ct %}<span>{{ c.ct }}</span>{% endif %}
+  </div>
+  <div class="pillars">{% for name, value in c.pillars.items() %}<span>{{ name }} {{ value }}</span>{% endfor %}</div>
+  {% if c.reasons %}
+  <ul>
+    {% for r in c.reasons %}<li>{{ r.text }} <span class="src">({{ r.src }})</span></li>{% endfor %}
+  </ul>
+  {% endif %}
+  {% if c.tier == 'red' and c.gates %}
+  <ul>
+    {% for g in c.gates %}<li><strong>{{ g.text }}</strong></li>{% endfor %}
+  </ul>
+  {% endif %}
+  {% if c.verdict %}<div class="verdict"><strong>Avis IA :</strong> {{ c.verdict }}</div>{% endif %}
+  {% if c.url and c.url.startswith('https://') %}<div><a href="{{ c.url }}" rel="noopener noreferrer" target="_blank">Voir l'annonce</a></div>{% endif %}
+</article>
+{% endmacro %}
+
+{% if top %}
+<h2>Les meilleures affaires</h2>
+<div class="grid">{% for c in top %}{{ card(c) }}{% endfor %}</div>
+{% endif %}
+
+{% for tier, label, items in sections %}
+{% if items %}
+<h2>{{ label }}{% if tier == 'red' %} — faits relevés{% endif %}</h2>
+<div class="grid">{% for c in items %}{{ card(c) }}{% endfor %}</div>
+{% endif %}
+{% endfor %}
+
+<footer>
+  Scores calculés automatiquement à partir de l'annonce, du procès-verbal de contrôle technique publié par la maison de vente
+  et de règles publiques ; ce sont des opinions, pas une expertise. Prix « frais inclus » estimés. Vérifiez toujours l'annonce
+  d'origine avant d'enchérir.
+</footer>
+</main>
+</body>
+</html>

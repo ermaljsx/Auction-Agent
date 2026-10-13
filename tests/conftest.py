@@ -10,6 +10,7 @@ import pytest
 from auction_agent.config import Settings
 
 FIXTURES = Path(__file__).parent / "fixtures"
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 _ENV_VARS = [
     "AUCTION_AGENT_DATA_DIR", "AUCTION_AGENT_DB", "AUCTION_AGENT_REPORTS_DIR", "GEMINI_API_KEY",

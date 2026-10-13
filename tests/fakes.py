@@ -52,3 +52,9 @@ class FakeHttp:
 
     def close(self) -> None:
         pass
+
+    def __enter__(self) -> "FakeHttp":
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        pass
