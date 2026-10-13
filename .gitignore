@@ -33,13 +33,15 @@ ENV/
 env.bak/
 venv.bak/
 
-# Local databases & scraped assets
-data/*.db
-data/*.sqlite
-data/*.sqlite3
+# Local data: databases (+ WAL/SHM), identity key, quarantine, legacy PDFs
+data/*
+!data/.gitkeep
+!data/documents/
 data/documents/*
 !data/documents/.gitkeep
-!data/.gitkeep
+
+# Real captured fixtures may contain personal data until reviewed
+tests/fixtures/alcopa/real/
 
 # Generated reports
 reports/*.html
