@@ -1,188 +1,141 @@
 # 🚗 Auction-Agent: Multi-Auction Crawler & AI Car Deal Finder
 
-> **Autonomous AI-powered intelligence platform for French automotive auctions.**
-> Crawls weekly auction listings, downloads and inspects technical control sheets (*Contrôle Technique*), maintenance records, and battery certificates, and leverages AI agents to rank vehicles by deal quality using a traffic-light scoring system.
+> Crawls French vehicle auction catalogues, reads the official *Contrôle Technique* (CT) reports, and scores **every** vehicle 0–100 into 🟢 / 🟡 / 🔴 tiers, so buyers see the best deals of the week first.
+
+The roadmap, architecture decisions, sources and known risks are in **[docs/MASTER_PLAN.md](docs/MASTER_PLAN.md)**. This README covers how to run the current code (Phase 1).
 
 ---
 
-## 🌟 Vision & Project Scope
+## What it does today (Phase 1)
 
-In the French automotive auction market (e.g., Alcopa Auction, BCAuto Enchères, VP Auto, Enchères VO, Interencheres), hundreds of vehicles are auctioned weekly. Sifting through hundreds of lots, cross-referencing mileage, age, price, and reading detailed French *Contrôle Technique* (CT) PDF reports to spot hidden mechanical defects is time-consuming and error-prone.
+| Step | What happens |
+|---|---|
+| Crawl | Walks one Alcopa sale, page by page, and **reports whether the walk was complete**. Each lot is identified by the product id in its URL, not by its lot number. |
+| Ingest | New cars get their detail page and CT PDF. The PDF is downloaded **into memory**, parsed, and VIN/plate-redacted, and is **never written to disk**. Known cars only get a cheap listing refresh. A relisted car gets one detail-page check, and its CT is downloaded again only if the CT link changed. |
+| Score | Deterministic rubric with gates, run on every car. The LLM (Gemini) is optional, only called on triggers, and its output is cached. |
+| Report | Self-contained HTML report: top picks, then cars grouped by tier, with the facts behind every score. |
 
-**Auction-Agent** solves this by establishing an autonomous, multi-agent pipeline:
-1. **Weekly Automated Scraping**: Crawls upcoming auction catalogs across major French auction halls.
-2. **Deep Document Inspection**: Automatically retrieves and parses technical inspection sheets (*Contrôle Technique*), maintenance histories, and EV/hybrid battery state-of-health (SoH) certificates.
-3. **AI Deal Scoring & Ranking**: Synthesizes market pricing, vehicle age, mileage ratios, known engine reliability flaws, and CT inspection defects to surface the **single greatest deals of the week**, ranked from best to worst.
-4. **Traffic-Light Tiering**:
-   - 🟢 **Top Tier (Green — Super Affaires)**: Exceptional value, clean technical inspection, high mechanical reliability, and attractive starting bids.
-   - 🟡 **Middle Tier (Yellow — Affaires Correctes)**: Acceptable daily drivers with fair pricing and minor cosmetic or non-critical maintenance items.
-   - 🔴 **Avoid Tier (Red — Risqué / Carton Rouge)**: High financial/safety risk—vehicles with major/critical inspection failures, suspicious histories, or engines with known catastrophic failure patterns.
+| Tier | Score | Meaning |
+|---|:---:|---|
+| 🟢 Profil favorable | 80–100 | Clean or minor-only CT, no known deal-breaker, good value against comparable cars |
+| 🟡 Profil correct | 60–79 | Acceptable, or data incomplete (capped here until the facts are known) |
+| 🔴 Risque élevé | < 60 | Critical CT defect, deal-breaker in the comments (VGE, moteur HS…), or a degraded EV battery |
 
----
+Known engine risks (1.2 PureTech wet belt, 1.5 BlueHDi chain, 1.2 TCe oil consumption) cost a heavy penalty and cap the car at 🟡 by default. Set `ENGINE_RISK_MAX_TIER=red` to send them to 🔴.
 
-## 🔮 Future Roadmap & Extensions
+## Quick start
 
-- **On-Demand Custom Auction Ingestion**: Allow users to paste *any* arbitrary auction link. The crawler and AI agent dynamically parse the target page on the fly, analyze the lot, and deliver instant recommendations.
-- **Full MVP Web Application**: A modern, interactive web platform (FastAPI + React/Vue/Tailwind) featuring faceted search, budget filters, visual lot galleries, and auction calendar timelines.
-- **Universal Multi-Auction House Adapters**: Modular scraper plugins for all premier French and European auction houses (VP Auto, BCAuto Enchères, Enchères VO, Agorastore, etc.).
-- **Live Market Price Benchmarks**: Automated integration with French used car market baselines (e.g., La Centrale, Leboncoin, Cote Argus) to dynamically compute true profit margins and bidding caps.
-- **Automated Alerts & Notifications**: Instant notifications (Telegram, Discord, Email) when a 🟢 Green-tier deal matching user preferences appears in upcoming auctions.
-
----
-
-## 🤖 Guide for Incoming AI Agents (Sparring Partner Protocol)
-
-> ### 📢 Attention AI Agents (Claude, GPT, Gemini, DeepSeek, etc.):
-> You are welcomed to this repository not merely as a task executor, but as an **active sparring partner** and **system architect**.
->
-> When you engage with this codebase:
-> 1. **Challenge Assumptions & Architecture**: Do not hesitate to critique the current file structure, data pipelines, database schema, or scoring heuristics. If you see a cleaner, more modular, or more performant design, propose and implement it.
-> 2. **Propose Optimizations**:
->    - **Scraping**: Transition from synchronous `requests` to async concurrency (`httpx` / `aiohttp` / `asyncio`) with adaptive rate limiting and robust proxy/session rotation.
->    - **PDF Extraction**: Improve French *Contrôle Technique* parsing heuristics to handle scanned/rasterized PDFs or non-standard regional formats via OCR.
->    - **Scoring Rubric**: Refine the prompt engineering in `advisor/ai_advisor.py` to incorporate deeper automotive domain knowledge (e.g., known engine codes: PureTech 1.2 EB2 wet belts, 1.5 BlueHDi DV5 camshaft chains, Renault 1.2 TCe H5Ft oil consumption, Ford EcoBoost 1.0 wet belts).
->    - **Database**: Scale from SQLite to PostgreSQL with Alembic migrations if multi-user concurrency or persistent web serving is introduced.
-> 3. **Maintain Modularity**: Ensure that adding new auction houses is as simple as subclassing an abstract `BaseAuctionScraper` interface.
-> 4. **Keep Tests & Types Solid**: Preserve strict typing, docstrings, and comprehensive error resilience.
-
----
-
-## 🏗️ Architecture & Component Design
-
-```
-Auction-Agent/
-├── config.py                  # Global settings, delays, base URLs, Gemini config
-├── database.py                # SQLite schema (sales, vehicles, documents, photos) & CRUD
-├── crawler.py                 # Pipeline orchestrator (listing -> detail -> docs -> DB)
-├── pdf_extractor.py           # pdfplumber text extraction & CT defect classifier
-├── run_crawl.py               # CLI entry point: run the crawler
-├── run_advisor.py             # CLI entry point: run the AI advisor & HTML generator
-├── requirements.txt           # Python package dependencies
-├── .gitignore                 # Excludes local databases, scraped PDFs, and caches
-├── scraper/
-│   ├── __init__.py
-│   ├── listing_scraper.py     # Paginated card crawler & metadata extractor
-│   ├── detail_scraper.py      # Spec table extractor & document link finder
-│   └── document_downloader.py # Binary/PDF stream downloader with retry logic
-├── advisor/
-│   ├── __init__.py
-│   └── ai_advisor.py          # Gemini AI evaluation, heuristic engine & HTML reporter
-├── data/                      # Local data directory (.gitkeep)
-│   ├── auction.db             # Local SQLite database (ignored by git)
-│   └── documents/             # Downloaded CT, maintenance, battery PDFs
-└── reports/                   # Output recommendation reports (.gitkeep)
-    └── recommendation_*.html  # Beautiful visual HTML reports
-```
-
-### Database Schema
-
-```
-┌──────────────────┐       ┌──────────────────┐       ┌──────────────────┐
-│      sales       │       │     vehicles     │       │    documents     │
-├──────────────────┤       ├──────────────────┤       ├──────────────────┤
-│ id (PK)          │1     *│ id (PK)          │1     *│ id (PK)          │
-│ sale_room        │──────<│ sale_id (FK)     │──────<│ vehicle_id (FK)  │
-│ sale_date        │       │ lot_number       │       │ doc_type (ct/mh) │
-│ sale_title       │       │ brand, model     │       │ download_url     │
-│ sale_url         │       │ year, mileage_km │       │ local_path       │
-│ total_lots       │       │ fuel_type,gearbox│       │ extracted_text   │
-│ crawled_at       │       │ starting_price   │       └──────────────────┘
-└──────────────────┘       │ current_bid      │       ┌──────────────────┐
-                           │ warranty         │       │      photos      │
-                           │ battery_health   │       ├──────────────────┤
-                           │ comments         │1     *│ id (PK)          │
-                           │ detail_url       │──────<│ vehicle_id (FK)  │
-                           │ crawled_at       │       │ photo_url        │
-                           └──────────────────┘       │ sort_order       │
-                                                      └──────────────────┘
-```
-
----
-
-## 🚦 Traffic-Light Deal Scoring
-
-Vehicles are scored on a 0–100 scale across three core pillars:
-1. **Mechanical Reliability (35%)**:
-   - Manufacturer/engine longevity track record.
-   - Kilometers per year ratio (French normal: ~15,000 km/year).
-   - Engine warning penalties (problematic wet timing belts, injector issues, etc.).
-2. **Physical & Inspection Condition (35%)**:
-   - *Contrôle Technique* (CT): Favorable vs. Défavorable.
-   - Tally of critical, major, and minor defects extracted directly from the PDF.
-   - Battery state-of-health (SoH) for electric and hybrid vehicles.
-   - Presence of an Alcopa warranty.
-3. **Value for Money (30%)**:
-   - Starting price / current bid compared to French market benchmarks.
-   - Estimated repair costs factored in for noted defects.
-
-| Tier | Score Range | Color Code | Description |
-|:---|:---:|:---:|:---|
-| **Super Affaires** | 80 – 100 | 🟢 Green | Prime recommendations. Highest reliability, clean inspection, outstanding price. |
-| **Affaires Correctes** | 60 – 79 | 🟡 Yellow | Solid opportunities. Minor manageable wear, fair pricing, typical daily drivers. |
-| **Risqué / À Éviter** | < 60 or Critical | 🔴 Red | High risk. Major defects, severe CT remarks, or high-failure-rate engine families. |
-
----
-
-## 🚀 Quick Start Guide
-
-### 1. Installation
+Python 3.10+ is required.
 
 ```bash
-# Clone the repository
 git clone https://github.com/ermaljsx/Auction-Agent.git
 cd Auction-Agent
-
-# Set up a virtual environment (recommended)
 python -m venv venv
-venv\Scripts\activate     # On Windows
-# source venv/bin/activate  # On Linux/macOS
-
-# Install dependencies
+venv\Scripts\activate        # Windows
+# source venv/bin/activate   # Linux / macOS
 pip install -r requirements.txt
 ```
 
-### 2. Crawl Auction Listings
-
 ```bash
-# Fast test: Scrape the first 5 vehicles (skip downloading PDFs)
+# Fast test: first 5 vehicles of the default sale, no PDF downloads
 python run_crawl.py --limit 5 --no-docs
 
-# Test crawl: Scrape the first page with all PDF documents
+# One listing page, with CT documents
 python run_crawl.py --pages 1 --limit 10
 
-# Full production crawl: All paginated listings and documents for the current sale
-python run_crawl.py
+# A specific sale (each Alcopa sale has its own id in the URL)
+python run_crawl.py --url /salle-de-vente-encheres/beauvais/13026
+
+# Score every vehicle and open the report (heuristics only, no API key needed)
+python run_advisor.py --open
+python run_advisor.py --max-price 12000 --open   # all-in budget, euros
 ```
 
-**CLI Flags for `run_crawl.py`**:
-- `--url <path>`: Auction URL path (default: Alcopa Beauvais VP sale).
-- `--limit N`: Limit total vehicles processed (useful for rapid testing).
-- `--pages N`: Limit listing pagination pages.
-- `--no-docs`: Skip downloading PDFs for rapid inventory sync.
+The same commands are available as `python -m auction_agent crawl | score | report | advise | stats | capture | cleanup-legacy`. Add `--help` to any command for its flags.
 
-### 3. Run the AI Advisor & Generate Deal Reports
+### Upgrading from the prototype
+On first run, the old `data/auction.db` is moved to `data/auction.v1-<date>.db` with VIN and plate columns emptied, and a new database is created. To delete the old database and the prototype's `data/documents/lot_*` PDFs:
 
 ```bash
-# Run with heuristic fallback (no API key required) and open report in browser
-python run_advisor.py --open
-
-# Run with Google Gemini AI analysis
-set GEMINI_API_KEY=your_gemini_api_key   # Windows PowerShell: $env:GEMINI_API_KEY="your_key"
-python run_advisor.py --open
-
-# Filter by maximum budget (e.g., max €12,000)
-python run_advisor.py --max-price 12000 --open
+python -m auction_agent cleanup-legacy            # dry run: shows what would be deleted
+python -m auction_agent cleanup-legacy --yes --delete-backups
 ```
 
-Reports are automatically saved as responsive HTML files in the `reports/` folder.
+### Optional: Gemini review
+The LLM writes short verdicts for the best cars and reviews cars near a tier boundary (adjustment bounded to −15…+5). It never overrides a 🔴 gate, and it never receives prices, VINs, plates or URLs.
 
----
+```bash
+set GEMINI_API_KEY=...            # PowerShell: $env:GEMINI_API_KEY="..."
+set GEMINI_MODEL=<model id>       # pick a current model in Google AI Studio
+set GEMINI_PAID_TIER=1            # required: free-tier terms restrict personal data / EEA use
+python run_advisor.py --open
+```
 
-## 🤝 Contributing
+The old default `gemini-2.5-flash` was reportedly being retired around 16–20 October 2026 (sources conflict), which is why no model is set by default. If the model id is wrong, scoring continues with heuristics only and prints a message.
 
-Contributions, feature requests, and architectural discussions from human developers and AI agents are welcome!
-Please feel free to submit issues or pull requests.
+## Configuration (environment variables)
 
-## 📄 License
+| Variable | Default | Purpose |
+|---|---|---|
+| `AUCTION_AGENT_DATA_DIR` | `data/` | Database, identity key, quarantine |
+| `AUCTION_AGENT_DB` | `data/auction.db` | Database file |
+| `AUCTION_AGENT_REPORTS_DIR` | `reports/` | HTML reports |
+| `AUCTION_AGENT_MIN_INTERVAL` | `2.0` | Seconds between two requests to the same site (plus jitter) |
+| `AUCTION_AGENT_USER_AGENT` | browser string | Consider an honest bot name with a contact address (see the legal note) |
+| `BUYER_PROFILE` | `particulier` | `pro` drops the private-buyer rules (CT under 6 months, VAT) |
+| `ENGINE_RISK_MAX_TIER` | `yellow` | `red` sends known risky engines to 🔴 |
+| `TIER_GREEN_MIN` / `TIER_YELLOW_MIN` | `80` / `60` | Tier thresholds |
+| `RELIST_DETAIL_CHECK` | `1` | One detail-page check when a car is relisted |
+| `IDENTITY_HMAC_KEY` | auto | Key for VIN hashing; otherwise generated once in `data/identity.key` |
+| `GEMINI_API_KEY`, `GEMINI_MODEL`, `GEMINI_PAID_TIER`, `LLM_LIMIT` | unset, unset, 0, 60 | Optional LLM review |
 
-MIT License. See [LICENSE](LICENSE) for details.
+## Architecture
+
+```
+auction_agent/
+├── config.py          # Settings from env, one UTC timestamp format
+├── db.py              # SQLite schema v2 (WAL, incremental vacuum), upserts, run lock
+├── http_client.py     # PoliteClient: retries, Retry-After cap, WAF detection, robots.txt
+├── documents.py       # in-memory PDF → text → redaction (no files on disk)
+├── ct_parser.py       # CT procès-verbal parser v2 (results, defects, odometer)
+├── privacy.py         # VIN/plate redaction, keyed HMAC identity
+├── ingest.py          # one-sale crawl, identity-aware, per-car error isolation
+├── adapters/
+│   ├── base.py        # AuctionAdapter contract + self-registering registry
+│   └── alcopa.py      # Alcopa listing/detail parsing and fee model
+├── scoring/
+│   ├── heuristics.py  # rubric, gates, cohort value
+│   ├── engines.json   # sourced engine-risk knowledge base
+│   ├── llm.py         # optional Gemini review (google-genai)
+│   └── service.py     # rebuild assessments, LLM cache
+├── report.py + templates/report.html.j2
+└── cli.py             # python -m auction_agent …
+```
+
+**Adding an auction house** means adding one module in `auction_agent/adapters/` that subclasses `AuctionAdapter` (it registers itself), plus HTML fixtures under `tests/fixtures/<slug>/`. Scoring and storage need no changes.
+
+## Tests
+
+```bash
+pip install -r requirements-dev.txt
+python -X warn_default_encoding -m pytest -q
+```
+
+The tests never use the network. The Alcopa fixtures are **synthetic**, built from markup that third parties quoted from real pages. Capture real pages (VIN and plate are redacted) and re-run the tests against them:
+
+```bash
+python -m auction_agent capture --url /salle-de-vente-encheres/beauvais/13026 --detail /voiture-occasion/peugeot/<slug>-<id>
+```
+
+## ⚖️ Legal and ethical notes (not legal advice)
+- Systematically extracting and republishing an auction catalogue can infringe the EU/French **database right**. French courts have ruled against listing aggregators, and the CJEU's *Innoweb* ruling concerned a car-ads meta-search engine. Alcopa's terms of sale reserve its descriptions and photos.
+- Until there is a licence or partnership: keep the tool **private**, store only derived data, link to the source listing, and never rehost photos or PDFs.
+- Licence plates and VINs are personal data under CNIL guidance. This code never stores them in clear text, never displays them, and never sends them to an LLM.
+- Respect robots.txt and rate limits. **Never bypass a block or CAPTCHA**: the crawler stops by design when it meets one.
+- Have a French IP and data-protection lawyer review the project before any public launch. The details are in docs/MASTER_PLAN.md §1 and Appendix A.
+
+## Roadmap
+Phase 2 adds the daily lifecycle engine: sale discovery, snapshot diff, dormancy and purge with a compact derived archive, and an APScheduler worker on Europe/Paris time. Phase 3 deepens the scoring, Phase 4 adds a private web MVP (Starlette + Jinja2 + HTMX), and Phase 5 adds VP Auto and on-demand links. Details are in [docs/MASTER_PLAN.md](docs/MASTER_PLAN.md).
+
+## License
+MIT. See [LICENSE](LICENSE).
