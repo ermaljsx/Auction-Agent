@@ -1,51 +1,11 @@
-"""CLI entry point to run the Alcopa Auction crawler."""
-import argparse
+"""CLI entry point to run the crawler (kept for the README commands).
+
+Equivalent to ``python -m auction_agent crawl``. Same flags as the original prototype:
+--url (one sale), --pages, --limit, --no-docs; plus --force-unlock.
+"""
 import sys
 
-from crawler import run_full_crawl
-from config import DEFAULT_SALE_URL
-
-
-def main():
-    parser = argparse.ArgumentParser(
-        description="Crawl vehicle listings and spec documents from Alcopa Auction."
-    )
-    parser.add_argument(
-        "--url",
-        default=DEFAULT_SALE_URL,
-        help="Sale page URL path (relative to alcopa-auction.fr or full URL)",
-    )
-    parser.add_argument(
-        "--pages",
-        type=int,
-        default=None,
-        help="Maximum number of listing pages to crawl (default: all)",
-    )
-    parser.add_argument(
-        "--limit",
-        type=int,
-        default=None,
-        help="Maximum number of vehicles to process (useful for testing)",
-    )
-    parser.add_argument(
-        "--no-docs",
-        action="store_true",
-        help="Skip downloading PDFs (faster for quick inventory checks)",
-    )
-
-    args = parser.parse_args()
-
-    try:
-        run_full_crawl(
-            sale_url=args.url,
-            max_pages=args.pages,
-            limit_vehicles=args.limit,
-            download_docs=not args.no_docs,
-        )
-    except KeyboardInterrupt:
-        print("\nCrawl interrupted by user.")
-        sys.exit(1)
-
+from auction_agent.cli import main
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main(["crawl", *sys.argv[1:]]))

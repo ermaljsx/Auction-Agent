@@ -73,3 +73,9 @@ def identity_hmac(key: bytes, value: Optional[str]) -> Optional[str]:
     if not normalised:
         return None
     return hmac.new(key, normalised.encode("ascii"), hashlib.sha256).hexdigest()
+
+
+def check_identity_key_ready(key_path: Path) -> tuple[bytes, str]:
+    """Load (or create) the identity key and return it with its short id."""
+    key = load_identity_key(key_path)
+    return key, key_id(key)
