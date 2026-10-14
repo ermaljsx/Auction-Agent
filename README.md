@@ -12,7 +12,7 @@ The roadmap, architecture decisions, sources and known risks are in **[docs/MAST
 |---|---|
 | Crawl | Walks one Alcopa sale, page by page, and **reports whether the walk was complete**. Each lot is identified by the product id in its URL, not by its lot number. |
 | Ingest | New cars get their detail page and CT PDF. The PDF is downloaded **into memory**, parsed, and VIN/plate-redacted, and is **never written to disk**. Known cars only get a cheap listing refresh. A relisted car gets one detail-page check, and its CT is downloaded again only if the CT link changed. |
-| Score | Deterministic rubric with gates, run on every car. The LLM (Gemini) is optional, only called on triggers, and its output is cached. |
+| Score | Deterministic rubric with gates, run on every car. The AI review (OpenAI, default model `gpt-6-luna`) is optional, only called on triggers, and its output is cached. |
 | Report | Self-contained HTML report: top picks (only cars whose sale is in the next 7 days), then cars grouped by tier, with the facts behind every score and every cap. |
 
 | Tier | Score | Meaning |
@@ -64,19 +64,45 @@ python -m auction_agent cleanup-legacy            # dry run: shows what would be
 python -m auction_agent cleanup-legacy --yes --delete-backups
 ```
 
-### Optional: Gemini review
-The LLM writes short verdicts for the best cars and reviews cars near a tier boundary (adjustment bounded to −15…+5). It never overrides a 🔴 gate, and it never receives prices, VINs, plates or URLs.
+### Optional: OpenAI review
+The AI writes short verdicts for the best cars and reviews cars near a tier boundary (adjustment bounded to −15…+5). It never overrides a 🔴 gate, and it never receives prices, VINs, plates, phone numbers, e-mails or URLs. Without a key, everything works with the rules only.
 
-```bash
-set GEMINI_API_KEY=...            # PowerShell: $env:GEMINI_API_KEY="..."
-set GEMINI_MODEL=<model id>       # pick a current model in Google AI Studio
-set GEMINI_PAID_TIER=1            # required: free-tier terms restrict personal data / EEA use
-python run_advisor.py --open
+**1. Prepare your OpenAI account** (one time, on platform.openai.com):
+- Add prepaid credits (the minimum was reported as $5). **Auto-recharge is on by default**: switch it off or cap it.
+- Create a project, e.g. `auction-agent`, and give it a **hard monthly spend limit** (e.g. $2–5). When the limit is reached, the app stops calling the AI and keeps scoring with the rules.
+- Under *Data controls → Sharing*, leave every sharing option off and decline any "free tokens for sharing data" offer.
+- Create an API key in that project.
+
+**2. Put the key in `.env`** (Windows, in the project folder):
+
+```bat
+copy .env.example .env
+notepad .env
 ```
 
-The old default `gemini-2.5-flash` was reportedly being retired around 16–20 October 2026 (sources conflict), which is why no model is set by default. If the model id is wrong, scoring continues with heuristics only and prints a message.
+PowerShell: `Copy-Item .env.example .env; notepad .env`. Paste your key after `OPENAI_API_KEY=` (no quotes needed) and save. Make sure Windows did not save it as `.env.txt`; the app warns you if it did. `.env` is git-ignored, so the key never goes to GitHub. Never put the key in `.env.example`, which is committed. A variable already set in your system environment (e.g. with `setx`) takes precedence over `.env`.
+
+**3. Check it with a small run:**
+
+```bash
+python -m auction_agent score --llm-limit 5
+```
+
+The first line says which model runs and where the key came from (`key from .env`, `key from the environment` or `key not set`); the key itself is never printed. Then read a few French verdicts in the report before raising the limit.
+
+**Model and cost** (prices and dates from OpenAI's pricing and deprecation pages as reported by search results and price tables on 2026-10-14; OpenAI's site could not be opened directly, so check the current figures on platform.openai.com):
+- `gpt-6-luna` is the cheapest OpenAI model not scheduled for retirement: $0.10 per 1M input tokens and $0.50 per 1M output tokens. `gpt-5-nano` costs less per token but shuts down on 2026-12-11, and `gpt-4.1-nano` on 2026-10-23.
+- It is a reasoning model whose default effort is "medium" (hidden reasoning tokens are billed as output). The app sends reasoning effort `none`; if the model ever spends reasoning tokens anyway, the run prints a note.
+- Estimated cost: about **$0.004 per run of 60 cars** (about $0.02 with conservative token estimates). Cars already reviewed cost nothing on later runs. Your hard spend limit is the real cap.
+- `gpt-6-luna` has no dated snapshot, so OpenAI can change its behaviour under the same name; the model that actually answered is stored with each review.
+
+**Data:** OpenAI does not train on API data unless you opt in. It may keep requests for up to 30 days for abuse monitoring, and processing happens in the US (EU data residency requires OpenAI's approval). The app sends `store=false` and turns prompt caching off. *Not legal advice.*
+
+If the key, model or credits are wrong, scoring continues with the rules only and prints a message saying what to fix. `GEMINI_*` variables from earlier versions are no longer read.
 
 ## Configuration (environment variables)
+
+Every variable can also go in the `.env` file (one `NAME=value` per line).
 
 | Variable | Default | Purpose |
 |---|---|---|
@@ -94,7 +120,11 @@ The old default `gemini-2.5-flash` was reportedly being retired around 16–20 O
 | `RELIST_DETAIL_CHECK` | `1` | One detail-page check when a car is relisted |
 | `LATE_CT_BUDGET` | `50` | Maximum detail pages re-checked per crawl for cars whose CT appeared late |
 | `IDENTITY_HMAC_KEY` | auto | Key for VIN hashing (hex, at least 32 bytes); otherwise generated once in `data/identity.key`. Never change it on an existing database |
-| `GEMINI_API_KEY`, `GEMINI_MODEL`, `GEMINI_PAID_TIER`, `LLM_LIMIT` | unset, unset, 0, 60 | Optional LLM review |
+| `OPENAI_API_KEY` | unset | Enables the optional AI review. Put it in `.env` (see above) |
+| `LLM_MODEL` | `gpt-6-luna` | OpenAI model for the AI review |
+| `LLM_REASONING_EFFORT` | `none` | `none`, `minimal`, `low`, `medium`, `high`, `xhigh` or `max`; anything above `none` costs more |
+| `LLM_LIMIT` | `60` | Maximum vehicles sent to the AI per run |
+| `AUCTION_AGENT_ENV_FILE` | `.env` | Settings file read at start-up (values already in the environment win) |
 
 ## Architecture
 
@@ -114,7 +144,7 @@ auction_agent/
 ├── scoring/
 │   ├── heuristics.py  # rubric, gates, cohort value
 │   ├── engines.json   # sourced engine-risk knowledge base
-│   ├── llm.py         # optional Gemini review (google-genai)
+│   ├── llm.py         # optional OpenAI review (openai SDK, strict JSON schema)
 │   └── service.py     # rebuild assessments, LLM cache
 ├── report.py + templates/report.html.j2
 └── cli.py             # python -m auction_agent …

@@ -26,12 +26,17 @@ from .heuristics import (
 from ..privacy import scrub_for_llm
 from .llm import (
     PROMPT_VERSION,
-    GeminiClient,
+    LLMBatchError,
     LLMClient,
     LLMConfigError,
     LLMTransientError,
+    OpenAIClient,
     payload_hash,
 )
+
+# A payload the LLM failed on twice is not sent again until its data, the model or the
+# prompt version changes (each of those changes the payload hash).
+MAX_LLM_FAILURES = 2
 
 
 def _fee_models() -> Callable[[str], Callable[..., float]]:
@@ -184,10 +189,16 @@ def rescore_all(
 
     # ------------------------------------------------------------------ LLM triggers
     cache: dict[tuple[int, str], sqlite3.Row] = {}
+    failures: dict[tuple[int, str], int] = {}
     if use_llm:  # --no-llm means heuristics only, cached LLM output included
         for row in conn.execute("SELECT * FROM llm_assessments WHERE status = 'ok' ORDER BY id"):
             cache[(row["vehicle_id"], row["llm_input_hash"])] = row
-    model_name = (client.model if client is not None else settings.gemini_model) or "none"
+        for row in conn.execute(
+            """SELECT vehicle_id, llm_input_hash, count(*) FROM llm_assessments
+               WHERE status = 'failed' GROUP BY vehicle_id, llm_input_hash"""
+        ):
+            failures[(row[0], row[1])] = row[2]
+    model_name = (client.model if client is not None else settings.llm_model) or "none"
 
     eligible = sorted(
         (p for p in partials if results[p.facts.vehicle_id]["tier"] != "red"
@@ -214,28 +225,53 @@ def rescore_all(
     llm_calls = llm_cached = 0
     pending = [t for t in triggered if (t[0].facts.vehicle_id, t[3]) not in cache]
     llm_cached = len(triggered) - len(pending)
+    given_up = [t for t in pending if failures.get((t[0].facts.vehicle_id, t[3]), 0) >= MAX_LLM_FAILURES]
+    if given_up:
+        pending = [t for t in pending if t not in given_up]
+        notes.append(f"LLM review skipped for {len(given_up)} vehicle(s) it already failed on twice "
+                     "(retried when their data, the model or the prompt changes).")
     if use_llm and pending:
         if client is None and settings.llm_enabled:
             try:
-                client = GeminiClient(settings.gemini_api_key, settings.gemini_model)
+                client = OpenAIClient(settings.openai_api_key, settings.llm_model,
+                                      reasoning_effort=settings.llm_reasoning_effort)
             except LLMConfigError as exc:
                 notes.append(str(exc))
+            else:
+                notes.extend(client.notes)
         elif client is None:
-            missing = [n for n, ok in (("GEMINI_API_KEY", settings.gemini_api_key), ("GEMINI_MODEL", settings.gemini_model),
-                                       ("GEMINI_PAID_TIER=1", settings.gemini_paid_tier)) if not ok]
-            notes.append(f"LLM review skipped for {len(pending)} vehicle(s): set {', '.join(missing)}.")
+            notes.append(f"LLM review skipped for {len(pending)} vehicle(s): set OPENAI_API_KEY "
+                         "(copy .env.example to .env and paste your key).")
         if client is not None:
             budget = settings.llm_limit if llm_limit is None else llm_limit
             todo = pending[: max(0, budget)]
             if len(pending) > len(todo):
                 notes.append(f"LLM budget reached: {len(pending) - len(todo)} vehicle(s) left for a later run.")
-            for i in range(0, len(todo), settings.llm_batch_size):
-                chunk = todo[i : i + settings.llm_batch_size]
+            # A car whose batch failed once is retried alone, so it cannot sink others again.
+            retries = [t for t in todo if failures.get((t[0].facts.vehicle_id, t[3]))]
+            fresh = [t for t in todo if not failures.get((t[0].facts.vehicle_id, t[3]))]
+            chunks = [[t] for t in retries] + [
+                fresh[i : i + settings.llm_batch_size] for i in range(0, len(fresh), settings.llm_batch_size)
+            ]
+            reasoning_tokens = 0
+            for chunk in chunks:
                 try:
                     batch = client.review([t[2] for t in chunk])
                 except LLMConfigError as exc:
                     notes.append(str(exc))
                     break
+                except LLMBatchError as exc:
+                    llm_calls += 1
+                    with db.write_tx(conn):
+                        for part, kind, payload, h in chunk:
+                            conn.execute(
+                                """INSERT INTO llm_assessments (vehicle_id, kind, llm_input_hash, prompt_version,
+                                       llm_model, status, error, created_at)
+                                   VALUES (?, ?, ?, ?, ?, 'failed', ?, ?)""",
+                                (part.facts.vehicle_id, kind, h, PROMPT_VERSION, client.model, str(exc)[:300], now_s),
+                            )
+                    notes.append(f"LLM could not review {len(chunk)} vehicle(s): {exc}")
+                    continue
                 except LLMTransientError as exc:
                     notes.append(f"LLM temporarily unavailable: {exc}")
                     break
@@ -243,6 +279,8 @@ def rescore_all(
                     notes.append(f"LLM unavailable ({exc.__class__.__name__}): {exc}")
                     break
                 llm_calls += 1
+                reasoning_tokens += getattr(batch, "tokens_reasoning", None) or 0
+                answered_by = getattr(batch, "model", None) or client.model
                 first_row = True
                 with db.write_tx(conn):
                     for part, kind, payload, h in chunk:
@@ -255,7 +293,7 @@ def rescore_all(
                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ok', ?, ?, ?)""",
                             # The adjustment is always stored, so a row cached as a 'verdict'
                             # still serves a later 'adjust' trigger for the same payload.
-                            (part.facts.vehicle_id, kind, h, PROMPT_VERSION, client.model,
+                            (part.facts.vehicle_id, kind, h, PROMPT_VERSION, answered_by,
                              review.adjustment, json.dumps(review.reasons, ensure_ascii=False),
                              review.verdict or None,
                              batch.tokens_in if first_row else None,  # batch totals, recorded once
@@ -265,6 +303,9 @@ def rescore_all(
                         cache[(part.facts.vehicle_id, h)] = conn.execute(
                             "SELECT * FROM llm_assessments WHERE id = last_insert_rowid()"
                         ).fetchone()
+            if reasoning_tokens:
+                notes.append(f"The model used {reasoning_tokens} hidden reasoning tokens (billed as output): "
+                             "check LLM_REASONING_EFFORT.")
 
     # ------------------------------------------------------------------ final pass
     verdicts: dict[int, Optional[str]] = {}

@@ -26,6 +26,9 @@ wheels/
 
 # Virtual environments
 .env
+# Local settings files (.env.txt is what Windows Notepad often saves); keep the template
+.env.*
+!.env.example
 .venv
 env/
 venv/

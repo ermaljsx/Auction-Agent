@@ -1,4 +1,4 @@
-"""Optional LLM review (Gemini via google-genai), used only on triggers.
+"""Optional LLM review (OpenAI Chat Completions), used only on triggers.
 
 The LLM never sees prices, VINs, plates, URLs or raw CT text: only normalised specs,
 parsed CT codes and labels, known engine flags and redacted comments, all inside a
@@ -10,10 +10,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from dataclasses import dataclass
 from typing import Any, Optional, Protocol
 
-PROMPT_VERSION = "p1-2026.10"
+PROMPT_VERSION = "p2-2026.10"
 
 SYSTEM_PROMPT = """Tu es un expert du marché français des véhicules d'occasion et un mécanicien.
 Tu reçois des véhicules mis aux enchères, au format JSON, entre les balises <DATA> et </DATA>.
@@ -30,6 +31,9 @@ technique et les moteurs à risque listés dans "engine_flags". Pour chaque véh
   Ne parle jamais du prix ni du vendeur.
 Recopie exactement la valeur "key" de chaque véhicule."""
 
+# Strict Structured Outputs: every object closes with additionalProperties=false and
+# lists every property as required. Bounds are stated in descriptions only (keyword
+# support in strict mode varies); parse_reviews() enforces them.
 RESPONSE_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
@@ -39,15 +43,17 @@ RESPONSE_SCHEMA: dict[str, Any] = {
                 "type": "object",
                 "properties": {
                     "key": {"type": "string"},
-                    "adjustment": {"type": "integer", "minimum": -15, "maximum": 5},
-                    "reasons": {"type": "array", "items": {"type": "string"}, "maxItems": 3},
-                    "verdict": {"type": "string"},
+                    "adjustment": {"type": "integer", "description": "Entier entre -15 et +5."},
+                    "reasons": {"type": "array", "items": {"type": "string"}, "description": "Au plus 3 phrases."},
+                    "verdict": {"type": "string", "description": "Au plus 2 phrases."},
                 },
                 "required": ["key", "adjustment", "reasons", "verdict"],
+                "additionalProperties": False,
             },
         }
     },
     "required": ["items"],
+    "additionalProperties": False,
 }
 
 
@@ -57,6 +63,13 @@ class LLMConfigError(RuntimeError):
 
 class LLMTransientError(RuntimeError):
     """Temporary failure: retry on a later run."""
+
+
+class LLMBatchError(LLMTransientError):
+    """This batch could not be reviewed (refusal, truncation, filter, bad JSON).
+
+    Other batches can still go ahead; the cars of this batch are retried one by one.
+    """
 
 
 @dataclass
@@ -71,7 +84,9 @@ class Review:
 class ReviewBatch:
     reviews: dict[str, Review]
     tokens_in: Optional[int] = None
-    tokens_out: Optional[int] = None
+    tokens_out: Optional[int] = None  # includes reasoning tokens
+    tokens_reasoning: Optional[int] = None
+    model: Optional[str] = None  # the model that actually answered (aliases can move)
 
 
 class LLMClient(Protocol):
@@ -95,10 +110,13 @@ def parse_reviews(raw: str, expected_keys: set[str]) -> dict[str, Review]:
     try:
         data = json.loads(raw)
     except (TypeError, json.JSONDecodeError) as exc:
-        raise LLMTransientError(f"Invalid JSON from model: {exc}") from exc
+        try:  # valid JSON followed by stray text
+            data, _ = json.JSONDecoder().raw_decode((raw or "").lstrip())
+        except (TypeError, json.JSONDecodeError):
+            raise LLMBatchError(f"Invalid JSON from model: {exc}") from exc
     items = data.get("items") if isinstance(data, dict) else None
     if not isinstance(items, list):
-        raise LLMTransientError("Model response has no 'items' list")
+        raise LLMBatchError("Model response has no 'items' list")
     out: dict[str, Review] = {}
     for item in items:
         if not isinstance(item, dict):
@@ -115,76 +133,173 @@ def parse_reviews(raw: str, expected_keys: set[str]) -> dict[str, Review]:
     return out
 
 
-class GeminiClient:
-    """google-genai client. Imported lazily so the rest of the app works without it."""
+OPENAI_BASE_URL = "https://api.openai.com/v1"
+# 429 bodies that mean "no money / limit reached": retrying cannot help.
+_BILLING_CODES = frozenset({
+    "insufficient_quota", "credit_balance_exhausted", "organization_spend_limit_exceeded",
+    "project_spend_limit_exceeded", "organization_usage_limit_exceeded",
+})
+_CONTENT_CODES = frozenset({"invalid_prompt", "context_length_exceeded"})
+# Optional request parameters that some models reject: dropped once, then retried.
+_DROPPABLE = ("temperature", "prompt_cache_options")
+# The SDK still reads these from the environment even with explicit arguments.
+_SDK_ENV = ("OPENAI_ORG_ID", "OPENAI_PROJECT_ID", "OPENAI_CUSTOM_HEADERS")
 
-    def __init__(self, api_key: str, model: str, timeout_s: float = 60.0):
-        try:
-            from google import genai  # noqa: PLC0415
-            from google.genai import types  # noqa: PLC0415
-        except ImportError as exc:  # pragma: no cover - depends on install
-            raise LLMConfigError("google-genai is not installed: pip install -r requirements.txt") from exc
-        self._genai, self._types = genai, types
-        # The SDK default is no timeout and a single attempt: bound both.
-        self._client = genai.Client(
-            api_key=api_key,
-            http_options=types.HttpOptions(
-                timeout=int(timeout_s * 1000),
-                retry_options=types.HttpRetryOptions(attempts=3),
-            ),
-        )
+
+def _short(exc: BaseException) -> str:
+    return str(getattr(exc, "message", None) or exc)[:200]
+
+
+class OpenAIClient:
+    """OpenAI Chat Completions with a strict JSON schema; the SDK is imported lazily.
+
+    The base URL is fixed (a stray OPENAI_BASE_URL never reroutes the data), responses
+    are not stored (store=False), and reasoning effort defaults to "none": the
+    default model reasons at "medium" otherwise and bills those tokens as output.
+    """
+
+    def __init__(
+        self,
+        api_key: str,
+        model: str,
+        *,
+        reasoning_effort: str = "none",
+        timeout_s: float = 120.0,
+        max_retries: int = 2,
+        sdk_client: Any = None,
+        http_client: Any = None,
+    ):
+        if not api_key:
+            raise LLMConfigError("OPENAI_API_KEY is empty: paste your key into .env (see .env.example).")
+        if not (api_key.isascii() and api_key.isprintable()) or any(c.isspace() or c in "\"'" for c in api_key):
+            raise LLMConfigError("OPENAI_API_KEY looks malformed (spaces, quotes or accented characters): paste it again.")
         self.model = model
-        self._thinking_supported = True
+        self.reasoning_effort = reasoning_effort
+        self.notes: list[str] = []
+        present = [name for name in _SDK_ENV if os.environ.get(name)]
+        if present:
+            self.notes.append(f"{', '.join(present)} is set in the environment; the OpenAI SDK applies it to every request.")
+        self._dropped: set[str] = set()
+        if sdk_client is not None:
+            self._client = sdk_client
+            return
+        try:
+            import openai  # noqa: PLC0415
+        except ImportError as exc:
+            raise LLMConfigError("The openai package is not installed: pip install -r requirements.txt") from exc
+        try:
+            self._client = openai.OpenAI(
+                api_key=api_key,
+                base_url=OPENAI_BASE_URL,
+                timeout=timeout_s,
+                max_retries=max_retries,
+                http_client=http_client,
+            )
+        except Exception as exc:  # never echo the key
+            raise LLMConfigError(f"Could not create the OpenAI client ({exc.__class__.__name__}).") from exc
 
-    def _config(self):
+    def _request(self, payloads: list[dict[str, Any]]) -> dict[str, Any]:
+        effort = self.reasoning_effort
         kwargs: dict[str, Any] = dict(
-            system_instruction=SYSTEM_PROMPT,
-            response_mime_type="application/json",
-            response_json_schema=RESPONSE_SCHEMA,
-            temperature=0,
+            model=self.model,
+            messages=[
+                {"role": "developer", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": build_prompt(payloads)},
+            ],
+            response_format={
+                "type": "json_schema",
+                "json_schema": {"name": "vehicle_reviews", "strict": True, "schema": RESPONSE_SCHEMA},
+            },
+            reasoning_effort=effort,
+            # Counts hidden reasoning tokens too, hence the larger budget above "none".
+            max_completion_tokens=(300 if effort == "none" else 1200) * len(payloads) + 1000,
+            store=False,
         )
-        if self._thinking_supported:
-            kwargs["thinking_config"] = self._types.ThinkingConfig(thinking_budget=0)
-        return self._types.GenerateContentConfig(**kwargs)
+        if effort == "none" and "temperature" not in self._dropped:
+            kwargs["temperature"] = 0  # reasoning models accept it only at effort "none"
+        if "prompt_cache_options" not in self._dropped:
+            # Explicit mode without breakpoints disables prompt caching: each payload is
+            # unique, so caching would only add the cache-write surcharge and retention.
+            kwargs["prompt_cache_options"] = {"mode": "explicit"}
+        return kwargs
+
+    @staticmethod
+    def _rejected_param(exc: BaseException) -> Optional[str]:
+        if getattr(exc, "status_code", None) != 400:
+            return None
+        param = getattr(exc, "param", None)
+        if param:
+            return str(param).split(".")[0].split("[")[0]
+        text = str(exc)
+        return next((name for name in (*_DROPPABLE, "reasoning_effort") if name in text), None)
+
+    def _map_error(self, exc: BaseException) -> LLMTransientError | LLMConfigError:
+        status = getattr(exc, "status_code", None)
+        codes = {str(getattr(exc, "type", None) or ""), str(getattr(exc, "code", None) or "")}
+        if status == 429 and codes & _BILLING_CODES:
+            return LLMConfigError(
+                "OpenAI refused the request for billing reasons (no credits left or spend limit "
+                "reached): add credits or raise the project limit on platform.openai.com."
+            )
+        if status == 429:
+            return LLMTransientError("OpenAI rate limit reached; the remaining cars are reviewed on a later run.")
+        if status == 401:
+            return LLMConfigError("OpenAI rejected the API key (HTTP 401): check OPENAI_API_KEY in .env.")
+        if status == 403:
+            return LLMConfigError(f"OpenAI denied access to model {self.model!r} (HTTP 403): check the key's project permissions.")
+        if status == 404:
+            return LLMConfigError(f"OpenAI does not offer model {self.model!r} to this key (HTTP 404): check LLM_MODEL.")
+        if status == 400:
+            param = self._rejected_param(exc)
+            if param == "reasoning_effort":
+                return LLMConfigError(
+                    f"Model {self.model!r} does not accept reasoning effort {self.reasoning_effort!r}: set "
+                    "LLM_REASONING_EFFORT to a value it supports (higher effort costs more)."
+                )
+            if param == "messages" or codes & _CONTENT_CODES or not param:
+                return LLMBatchError(f"OpenAI rejected this batch (HTTP 400): {_short(exc)}")
+            return LLMConfigError(f"OpenAI rejected parameter {param!r} for model {self.model!r} (HTTP 400): {_short(exc)}")
+        if status in (408, 409) or (isinstance(status, int) and status >= 500):
+            return LLMTransientError(f"OpenAI temporarily unavailable (HTTP {status}).")
+        if isinstance(status, int):
+            return LLMConfigError(f"OpenAI rejected the request (HTTP {status}): {_short(exc)}")
+        if isinstance(exc, TypeError):  # SDK older than the parameters we send
+            return LLMConfigError(f"The installed openai package is too old ({_short(exc)}): pip install -r requirements.txt")
+        return LLMTransientError(f"{exc.__class__.__name__}: {_short(exc)}")
 
     def review(self, payloads: list[dict[str, Any]]) -> ReviewBatch:
-        from google.genai import errors  # noqa: PLC0415
-
-        contents = build_prompt(payloads)
-        try:
+        while True:
             try:
-                response = self._client.models.generate_content(
-                    model=self.model, contents=contents, config=self._config()
-                )
-            except errors.ClientError as exc:
-                if getattr(exc, "code", None) == 400 and "thinking" in str(exc).lower() and self._thinking_supported:
-                    self._thinking_supported = False  # model requires thinking: retry with its default
-                    response = self._client.models.generate_content(
-                        model=self.model, contents=contents, config=self._config()
-                    )
-                else:
-                    raise
-        except errors.ClientError as exc:
-            code = getattr(exc, "code", None)
-            if code in (400, 401, 403, 404):
-                raise LLMConfigError(
-                    f"Gemini rejected the request (HTTP {code}). Check GEMINI_MODEL "
-                    f"({self.model!r}) against the models listed in Google AI Studio, and the API key."
-                ) from exc
-            raise LLMTransientError(str(exc)) from exc
-        except errors.APIError as exc:
-            raise LLMTransientError(str(exc)) from exc
-        except Exception as exc:  # network errors (httpx) are not wrapped by the SDK
-            raise LLMTransientError(f"{exc.__class__.__name__}: {exc}") from exc
-        usage = getattr(response, "usage_metadata", None)
-        reviews = parse_reviews(getattr(response, "text", None) or "", {p["key"] for p in payloads})
-        out_tokens = None
-        if usage is not None:
-            out_tokens = (getattr(usage, "candidates_token_count", 0) or 0) + (
-                getattr(usage, "thoughts_token_count", 0) or 0
-            )
+                completion = self._client.chat.completions.create(**self._request(payloads))
+                break
+            except Exception as exc:
+                param = self._rejected_param(exc)
+                if param in _DROPPABLE and param not in self._dropped:
+                    self._dropped.add(param)  # at most once per parameter: the loop ends
+                    continue
+                raise self._map_error(exc) from exc
+        return self._parse(completion, payloads)
+
+    def _parse(self, completion: Any, payloads: list[dict[str, Any]]) -> ReviewBatch:
+        choices = getattr(completion, "choices", None) or []
+        if not choices:
+            raise LLMBatchError("OpenAI returned no answer for this batch.")
+        message = getattr(choices[0], "message", None)
+        finish = getattr(choices[0], "finish_reason", None)
+        if getattr(message, "refusal", None):
+            raise LLMBatchError("The model refused to review this batch.")
+        if finish == "length":
+            raise LLMBatchError("The answer was cut off (max_completion_tokens reached).")
+        if finish == "content_filter":
+            raise LLMBatchError("The answer was blocked by OpenAI's content filter.")
+        reviews = parse_reviews(getattr(message, "content", None) or "", {p["key"] for p in payloads})
+        # Usage is optional in the SDK types: a missing field never discards paid reviews.
+        usage = getattr(completion, "usage", None)
+        details = getattr(usage, "completion_tokens_details", None)
         return ReviewBatch(
             reviews=reviews,
-            tokens_in=getattr(usage, "prompt_token_count", None),
-            tokens_out=out_tokens,
+            tokens_in=getattr(usage, "prompt_tokens", None),
+            tokens_out=getattr(usage, "completion_tokens", None),
+            tokens_reasoning=getattr(details, "reasoning_tokens", None),
+            model=getattr(completion, "model", None) or self.model,
         )

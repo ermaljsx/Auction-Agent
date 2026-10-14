@@ -60,7 +60,7 @@ def seed(conn, n=8, base_price=10_000.0, comments=None):
 
 
 def llm_settings(settings):
-    return settings.replace(gemini_api_key="k", gemini_model="fake-model", gemini_paid_tier=True)
+    return settings.replace(openai_api_key="k", llm_model="fake-model")
 
 
 def test_every_vehicle_gets_a_tier(settings):
@@ -72,12 +72,12 @@ def test_every_vehicle_gets_a_tier(settings):
         assert all(r["confidence"] == "full" and r["value_basis"].startswith("model") for r in rows)
 
 
-def test_llm_skipped_without_paid_tier_config(settings):
+def test_llm_skipped_without_api_key(settings):
     with db.open_db(settings.db_path) as conn:
         seed(conn)
         out = rescore_all(conn, settings, today=TODAY, now=NOW)
     assert out["llm_calls"] == 0
-    assert any("GEMINI_PAID_TIER" in n for n in out["notes"])
+    assert any("OPENAI_API_KEY" in n and ".env.example" in n for n in out["notes"])
 
 
 def test_llm_results_are_cached_and_price_changes_cost_nothing(settings):
@@ -129,8 +129,9 @@ def test_parse_reviews_validates_output():
     assert list(out) == ["1"] and out["1"].adjustment == -15 and len(out["1"].reasons) == 3
 
 
-def test_scoring_imports_without_google_genai():
-    code = "import sys; sys.modules['google'] = None; import auction_agent.scoring.service; print('ok')"
+def test_scoring_imports_without_llm_sdks():
+    code = ("import sys; sys.modules['openai'] = None; sys.modules['google'] = None; "
+            "import auction_agent.scoring.service, auction_agent.cli; print('ok')")
     result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, encoding="utf-8", cwd=PROJECT_ROOT)
     assert result.stdout.strip() == "ok", result.stderr
 

@@ -16,21 +16,34 @@ from typing import Optional, Sequence
 from urllib.parse import urljoin, urlsplit
 
 from rich.console import Console
+from rich.markup import escape
 
 from . import db
 from .adapters import get_adapter_class
 from .adapters.alcopa import BASE_URL as ALCOPA_BASE_URL
-from .config import DEFAULT_SALE_URL, PROJECT_DIR, Settings
+from .config import DEFAULT_SALE_URL, PROJECT_DIR, EnvFileReport, Settings, load_env_file
 from .http_client import FetchError, PoliteClient
 from .documents import sweep_quarantine
 from .ingest import CrawlOptions, run_crawl
 from .privacy import redact
 
 console = Console()
+_env_report: Optional[EnvFileReport] = None  # what main() loaded from .env (names only)
 
 
 def _settings() -> Settings:
     return Settings.from_env()
+
+
+def llm_status(settings: Settings, env_report: Optional[EnvFileReport] = None) -> str:
+    """One line saying which model runs and where the key came from (never the key)."""
+    if not settings.openai_api_key:
+        source = "not set (see .env.example)"
+    elif env_report is not None and "OPENAI_API_KEY" in env_report.loaded:
+        source = f"from {env_report.path.name}"
+    else:
+        source = "from the environment"
+    return f"LLM: {settings.llm_model}, reasoning effort {settings.llm_reasoning_effort}, key {source}"
 
 
 # --------------------------------------------------------------------------- crawl
@@ -60,9 +73,10 @@ def cmd_crawl(args: argparse.Namespace, settings: Settings) -> int:
     for key, value in report.counts.items():
         console.print(f"  {key:>14}: {value}")
     for reason in report.reasons:
-        console.print(f"  [yellow]note[/yellow] {reason}", highlight=False, markup=True)
+        console.print(f"  [yellow]note[/yellow] {escape(reason)}", highlight=False)
     for failure in report.failures[:10]:
-        console.print(f"  [red]failed[/red] {failure['external_id']}: {failure['error']}", highlight=False)
+        console.print(f"  [red]failed[/red] {escape(str(failure['external_id']))}: {escape(str(failure['error']))}",
+                      highlight=False)
     return 0 if report.status in ("ok", "incomplete") else 2
 
 
@@ -72,6 +86,8 @@ def cmd_crawl(args: argparse.Namespace, settings: Settings) -> int:
 def cmd_score(args: argparse.Namespace, settings: Settings) -> int:
     from .scoring.service import rescore_all
 
+    status = "LLM: off (--no-llm)" if args.no_llm else llm_status(settings, _env_report)
+    console.print(status, markup=False, highlight=False)
     with db.open_db(settings.db_path) as conn:
         result = rescore_all(conn, settings, use_llm=not args.no_llm, llm_limit=args.llm_limit,
                              log=lambda m: console.print(m, markup=False, highlight=False))
@@ -79,7 +95,7 @@ def cmd_score(args: argparse.Namespace, settings: Settings) -> int:
                   f"(green {result['green']}, yellow {result['yellow']}, red {result['red']}); "
                   f"LLM calls {result['llm_calls']}, cached {result['llm_cached']}.")
     for note in result.get("notes", []):
-        console.print(f"  [yellow]note[/yellow] {note}", highlight=False)
+        console.print(f"  [yellow]note[/yellow] {escape(note)}", highlight=False)
     return 0
 
 
@@ -88,7 +104,7 @@ def cmd_report(args: argparse.Namespace, settings: Settings) -> int:
 
     with db.open_db(settings.db_path) as conn:
         path = generate_report(conn, settings, sale_id=args.sale_id, max_price=args.max_price)
-    console.print(f"[bold green]Report saved to {path}[/bold green]")
+    console.print(f"[bold green]Report saved to {escape(str(path))}[/bold green]")
     if args.open:
         webbrowser.open(path.as_uri())
     return 0
@@ -114,7 +130,7 @@ def cmd_stats(args: argparse.Namespace, settings: Settings) -> int:
         console.print("  sales (id = value for --sale-id):")
         for s in sales:
             console.print(f"    {s['id']:>4}  {s['house']} {s['external_id']}  {s['room'] or ''}  "
-                          f"{(s['starts_at'] or '')[:10]}  {s['status']}", highlight=False)
+                          f"{(s['starts_at'] or '')[:10]}  {s['status']}", markup=False, highlight=False)
     return 0
 
 
@@ -135,18 +151,18 @@ def cmd_capture(args: argparse.Namespace, settings: Settings) -> int:
             try:
                 html = http.get_text(url)
             except FetchError as exc:
-                console.print(f"[red]{url}: {exc}[/red]", highlight=False)
+                console.print(f"[red]{escape(url)}: {escape(str(exc))}[/red]", highlight=False)
                 return 2
             tail = urlsplit(url).path.rstrip("/").rsplit("/", 1)[-1] or "page"
             safe = re.sub(r"[^A-Za-z0-9._-]", "_", tail)[:80]
             digest = hashlib.sha256(url.encode("utf-8")).hexdigest()[:8]
             target = (out_dir / f"{kind}-{safe}-{digest}.html").resolve()
             if target.parent != out_dir.resolve():
-                console.print(f"[red]Refusing to write outside {out_dir}[/red]", highlight=False)
+                console.print(f"[red]Refusing to write outside {escape(str(out_dir))}[/red]", highlight=False)
                 return 2
             target.write_text(redact(html) or "", encoding="utf-8")
             name = target.name
-            console.print(f"Saved {out_dir / name}", highlight=False)
+            console.print(f"Saved {out_dir / name}", markup=False, highlight=False)
     console.print("[yellow]Review these files by hand before committing them (they are git-ignored).[/yellow]")
     return 0
 
@@ -171,7 +187,7 @@ def cmd_cleanup_legacy(args: argparse.Namespace, settings: Settings) -> int:
         console.print(f"Nothing to clean up{f' (removed {removed} expired quarantined PDF(s))' if removed else ''}.")
         return 0
     for what, path in actions:
-        console.print(f"  {what}: {path}", highlight=False)
+        console.print(f"  {what}: {path}", markup=False, highlight=False)
     if not args.yes:
         console.print("[yellow]Dry run. Re-run with --yes to apply.[/yellow]")
         return 0
@@ -208,7 +224,7 @@ def build_parser() -> argparse.ArgumentParser:
     def add_score_args(p: argparse.ArgumentParser) -> None:
         p.add_argument("--no-llm", action="store_true",
                        help="Heuristic scoring only (no LLM calls, cached LLM output ignored)")
-        p.add_argument("--llm-limit", type=int, default=None, help="Maximum LLM calls this run")
+        p.add_argument("--llm-limit", type=int, default=None, help="Maximum vehicles sent to the LLM this run")
 
     def add_report_args(p: argparse.ArgumentParser) -> None:
         p.add_argument("--sale-id", type=int, default=None, help="Only this sale (database id)")
@@ -245,15 +261,21 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
+    global _env_report
     parser = build_parser()
     args = parser.parse_args(argv)
+    # Every entry point goes through here, so .env (API key, IDENTITY_HMAC_KEY…) is
+    # always applied the same way. Values already set in the environment win.
+    _env_report = load_env_file()
+    for warning in _env_report.warnings:
+        console.print(f"[yellow]warning[/yellow] {escape(warning)}", highlight=False)
     try:
         return int(args.func(args, _settings()) or 0)
     except KeyboardInterrupt:
         console.print("\nInterrupted.")
         return 130
     except (db.LegacyDatabaseError, db.RunLockedError, RuntimeError, ValueError, KeyError) as exc:
-        console.print(f"[red]{exc}[/red]", highlight=False)
+        console.print(f"[red]{escape(str(exc))}[/red]", highlight=False)
         return 2
 
 

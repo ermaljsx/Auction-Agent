@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import gc
+import os
 import sqlite3
 from pathlib import Path
 
@@ -12,18 +13,18 @@ from auction_agent.config import Settings
 FIXTURES = Path(__file__).parent / "fixtures"
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-_ENV_VARS = [
-    "AUCTION_AGENT_DATA_DIR", "AUCTION_AGENT_DB", "AUCTION_AGENT_REPORTS_DIR", "GEMINI_API_KEY",
-    "GEMINI_MODEL", "GEMINI_PAID_TIER", "IDENTITY_HMAC_KEY", "BUYER_PROFILE",
-    "ENGINE_RISK_MAX_TIER", "RELIST_DETAIL_CHECK", "AUCTION_AGENT_USER_AGENT",
-    "AUCTION_AGENT_ROBOTS_TOKEN", "LATE_CT_BUDGET",
-]
+# Settings the app (or the OpenAI SDK) reads from the environment: never inherited.
+_ENV_PREFIXES = ("AUCTION_AGENT_", "OPENAI_", "LLM_", "GEMINI_", "TIER_")
+_ENV_VARS = ["IDENTITY_HMAC_KEY", "BUYER_PROFILE", "ENGINE_RISK_MAX_TIER", "RELIST_DETAIL_CHECK", "LATE_CT_BUDGET"]
 
 
 @pytest.fixture(autouse=True)
-def _clean_env(monkeypatch):
-    for name in _ENV_VARS:
-        monkeypatch.delenv(name, raising=False)
+def _clean_env(monkeypatch, tmp_path):
+    for name in list(os.environ):
+        if name.startswith(_ENV_PREFIXES) or name in _ENV_VARS:
+            monkeypatch.delenv(name, raising=False)
+    # The owner's real .env (with their API key) is never read by tests.
+    monkeypatch.setenv("AUCTION_AGENT_ENV_FILE", str(tmp_path / "absent.env"))
 
 
 @pytest.fixture(autouse=True)

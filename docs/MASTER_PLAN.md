@@ -50,7 +50,7 @@ Auction-Agent is a CLI prototype: about 1,900 LOC and no tests. It crawls one ha
 | 6 | HIGH | Only `candidates[:80]` are sent (`batch_size` is unused) and only a top 10 is requested. Most cars get no score or tier, and red cars appear under "Top Recommandations". | `advisor/ai_advisor.py:115,135,282` |
 | 7 | HIGH | Unescaped f-string HTML (XSS confirmed). A `None` from the LLM crashes rendering *after* the paid call, and the result is lost. | `ai_advisor.py:266-345` |
 | 8 | HIGH | Detail failures are silent: no retry, and an empty document list is stored as "ingested". There is no per-vehicle error isolation. | `detail_scraper.py:85-91`, `crawler.py:73-124` |
-| 9 | HIGH | `google-generativeai` support ended on 30 Nov 2025 (high confidence). `gemini-2.5-flash` shutdown dates conflict: Gemini API 16 Oct 2026 per a forum, Vertex 20 Oct, earlier 404s reported, and reportedly restricted to existing users (medium). The LLM path is about to break. | `ai_advisor.py:65`, `config.py:31` |
+| 9 | HIGH | `google-generativeai` support ended on 30 Nov 2025 (high confidence). `gemini-2.5-flash` shutdown dates conflict: Gemini API 16 Oct 2026 per a forum, Vertex 20 Oct, earlier 404s reported, and reportedly restricted to existing users (medium). The LLM path is about to break. **Resolved 2026-10-14: the owner switched the LLM to OpenAI `gpt-6-luna` (see §4).** | `ai_advisor.py:65`, `config.py:31` |
 | 10 | MED | Other defects: <br>• connections are never closed (`with sqlite3.connect()`) and there is no WAL; <br>• `data-current-price` is stored as `starting_price`, but it holds the opening price until bids arrive (medium); <br>• the `.text-nowrap` price fallback returns garbage; <br>• `clean_int("1598 cm3")` returns 15983; <br>• the heuristic hard-codes 2026, invents defaults (2018 / 150k km / €10k) and scores any car of €25k or more at value 0. | various |
 
 **Missing entirely:** sale discovery, per-house identity, completeness signals, run observability, an adapter interface, tests, a price-reference source, and a legal posture.
@@ -328,16 +328,19 @@ class AuctionAdapter(ABC):
   - `verdict` text for 🟢 and Top N cars only.
 - **Adjustment** is bounded to **[−15, +5]** and the reasons are stored. Anything from the LLM is labelled "Avis IA".
 - **Payload:** parsed codes and labels plus redacted comments inside delimited data blocks. **Never** raw CT text, VIN, plate or price.
-- **Client:**
-  - `google-genai >=2,<3`, imported lazily;
-  - `response_mime_type` JSON plus a schema;
-  - `temperature 0` and a minimal thinking budget;
-  - in Phase 1, synchronous batches of 20 with `--llm-limit 60`; Batch API in Phase 3.
+- **Client** (changed 2026-10-14 from Gemini to OpenAI at the owner's request):
+  - `openai >=3.31,<4` (Python ≥3.10, uses httpx2), imported lazily;
+  - Chat Completions with a strict `json_schema` response format (`additionalProperties: false`, every property required; bounds enforced in code);
+  - `reasoning_effort="none"`, `temperature 0` (accepted only at effort `none`), `store=False`, prompt caching off (`prompt_cache_options.mode="explicit"` without breakpoints);
+  - fixed base URL `https://api.openai.com/v1`, so a stray `OPENAI_BASE_URL` cannot reroute data;
+  - in Phase 1, synchronous batches of 20 with `--llm-limit 60`; Batch API (or Flex) in Phase 3.
 - **Configuration:**
-  - The model comes from `GEMINI_MODEL` and has **no default**. The owner confirms a current ID in AI Studio; a Flash-Lite-class model is suggested but unverified.
-  - A 404 / NOT_FOUND triggers a fast, clear error and heuristic-only scoring.
-  - LLM calls require `GEMINI_PAID_TIER=1`. The research says Gemini's terms bar personal data on the free tier and require the paid tier for EEA use (medium; only the Dec 2025 terms were seen).
-- **Cost:** about 3.6–3.9k new IDs/week × 40% assumed triggers × (about 1.5k input + 300 output tokens) ≈ **$0.5–1.5/week** on 3.5 Flash-Lite Batch, or about $2–5/week on 3.8 Flash Batch after the reported price rise of 1 Jan 2027. These are unverified snippet prices.
+  - The key is `OPENAI_API_KEY`, read from the environment or from a git-ignored `.env` file (template: `.env.example`).
+  - The model is `LLM_MODEL`, **default `gpt-6-luna`**. This reverses the earlier "no default model" decision: the owner chose the cheapest OpenAI model not scheduled for retirement (medium confidence: prices and deprecations come from search snippets plus the SDK's model list and litellm's price table, all dated 2026-10-14; OpenAI's site was blocked from the sandbox).
+  - `LLM_REASONING_EFFORT` defaults to `none`. A model that rejects it stops the LLM with a clear message instead of falling back to its costlier default.
+  - Billing errors (no credits, spend limit), 401/403/404 and rejected parameters stop the LLM for the run with a clear message; heuristic scoring continues. A refused, truncated or filtered batch is recorded as failed and its cars are retried alone on the next run, then skipped after two failures until their data changes.
+  - The `GEMINI_PAID_TIER` guard is dropped: OpenAI API data is not used for training unless the organisation opts in (high confidence), and no free tier is usable without credits (medium).
+- **Cost:** about 3.6–3.9k new IDs/week × 40% assumed triggers × (about 1.5k input + 300 output tokens) ≈ **$0.45/week** on `gpt-6-luna` at standard rates ($0.10 / $0.50 per 1M tokens), about half on Batch or Flex. These are unverified snippet prices.
 
 **Top N of the week.** Ranked over the *filtered* eligible set: sales in the next 7 days, tier ≠ red, `confidence='full'`, and audience matching the buyer profile.
 
@@ -389,7 +392,7 @@ class AuctionAdapter(ABC):
   - `config.py`: `PROJECT_DIR=Path(__file__).resolve().parents[1]`; env settings; `utc_iso()`; HMAC key bootstrapped into `data/identity.key`; Python ≥ 3.10 guard.
   - `requirements.txt`:
     - drop `google-generativeai`;
-    - add `google-genai>=2,<3`, `jinja2>=3.1`, `tzdata`, `urllib3>=2,<3`;
+    - add `google-genai>=2,<3` (replaced by `openai>=3.31,<4` on 2026-10-14), `jinja2>=3.1`, `tzdata`, `urllib3>=2,<3`;
     - raise floors to `pdfplumber>=0.10.4` and `requests>=2.31`.
   - `requirements-dev.txt`: `pytest>=8`.
   - `pytest.ini` (`error::EncodingWarning`).
@@ -426,9 +429,9 @@ class AuctionAdapter(ABC):
   - `report.py` + `templates/report.html.j2` via `PackageLoader`, with autoescape and None-safe formatting. It shows the Top N, the cars by tier, and a "Risque élevé selon nos critères" section listing the facts.
   - `cli score/report/stats` + the `run_advisor.py` shim (`--sale-id`, `--max-price` with NULL prices shown as "prix inconnu", `--open`).
   - `test_scoring`, `test_report` (XSS escaped), and an end-to-end CLI test on fixtures.
-- **C9 `scoring/llm.py`:** a GeminiClient behind a Protocol, trigger-only calls, `llm_assessments` caching, untrusted text inside data blocks, and the `GEMINI_MODEL`/`GEMINI_PAID_TIER` guards. Tests use a FakeClient and check that an unchanged payload makes 0 calls and that importing works without `google.genai`.
+- **C9 `scoring/llm.py`:** a GeminiClient (an OpenAIClient since 2026-10-14) behind a Protocol, trigger-only calls, `llm_assessments` caching, untrusted text inside data blocks, and the `GEMINI_MODEL`/`GEMINI_PAID_TIER` guards. Tests use a FakeClient and check that an unchanged payload makes 0 calls and that importing works without `google.genai`.
 - **C10 README and legacy removal:**
-  - README: architecture, commands, `python -X warn_default_encoding -m pytest -q`, a legal note and the Gemini setup.
+  - README: architecture, commands, `python -X warn_default_encoding -m pytest -q`, a legal note and the LLM setup.
   - The legacy modules (`config.py`, `crawler.py`, `database.py`, `pdf_extractor.py`, `scraper/`, `advisor/`) are deleted.
   - `main` keeps the working crawler until you validate this branch on Windows with `python run_crawl.py --limit 5` and `python run_advisor.py --open`, and merge.
 - Push with `git push -u origin claude/relaxed-albattani-3w9fgh`. No PR unless you ask for one.
@@ -482,6 +485,15 @@ class AuctionAdapter(ABC):
 - gemini-2.5-flash shutdown dates (conflicting): https://discuss.ai.google.dev/t/gemini-2-5-flash-and-gemini-2-5-flash-lite-returning-404-no-longer-available-today-july-9-contradicts-oct-16-2026-shutdown-date/174267
 - Gemini API terms, paid vs unpaid tier (archived Dec 2025 version only): https://ai.google.dev/gemini-api/terms-archive/terms_12_18_25
 
+### OpenAI (added 2026-10-14; high for the SDK, medium for models, prices and terms)
+OpenAI's websites returned proxy 403 from the sandbox, so these pages were seen only through search results. Model ids, deprecation notes and parameter names were cross-checked in the `openai` 3.31.0 wheel; prices were cross-checked in litellm 1.105.1's price table.
+- `openai` SDK on PyPI (read directly, wheel source): https://pypi.org/project/openai/
+- Pricing (snippets): https://developers.openai.com/api/docs/pricing
+- `gpt-6-luna` model page (snippets): https://developers.openai.com/api/docs/models/gpt-6-luna
+- Reasoning effort and GPT-6 Luna migration (snippets): https://developers.openai.com/api/docs/guides/reasoning · https://help.openai.com/en/articles/20001600-migrating-from-gpt-4x-to-gpt-6-luna
+- Deprecations (snippets): https://developers.openai.com/api/docs/deprecations
+- API data usage, retention and data residency (snippets): https://developers.openai.com/api/docs/guides/your-data
+
 ### Stack (high; versions read from PyPI)
 - APScheduler 3.11.x stable, 4.0 still alpha: https://pypi.org/project/APScheduler/
 - Python sqlite3: the context manager does not close the connection; ResourceWarning in 3.13: https://raw.githubusercontent.com/python/cpython/main/Doc/library/sqlite3.rst
@@ -524,9 +536,9 @@ Run from **both** the owner's network **and** the intended VPS. At most about 12
 See the commit history on `claude/relaxed-albattani-3w9fgh` and the README "Architecture" section. Known limits of Phase 1:
 - Every crawl is `scoped` (one sale), so no car is ever marked missing or purged. The lifecycle engine is Phase 2.
 - Alcopa selectors are ported from the original prototype and tested against synthetic fixtures built from third-party-quoted markup. They must be re-validated on real captured pages (`cli capture`).
-- The LLM is optional and runs only on triggers. It needs `GEMINI_API_KEY`, `GEMINI_MODEL` and `GEMINI_PAID_TIER=1`.
+- The LLM is optional and runs only on triggers. It needs `OPENAI_API_KEY` (in `.env` or the environment); the model defaults to `gpt-6-luna`.
 - Redirects are followed by hand. Every hop is robots-checked and throttled, but a redirect to another host is not refused, because the CT links' real redirect behaviour is unknown until recon. Decide in Phase 2.
-- The Gemini call sets a zero thinking budget and retries once without it if the model rejects the setting. The real behaviour of the model id the owner picks is unverified.
+- No live OpenAI call was possible from the sandbox. The request shape was tested against the real SDK with an in-memory transport, but whether `gpt-6-luna` accepts strict schema + effort `none` + `temperature 0` + prompt-cache options together, and whether it really spends zero reasoning tokens at `none`, is confirmed only by the owner's first run (`score --llm-limit 5`). Rejected `temperature` or cache options are dropped and retried automatically.
 - CT parser v2 is still `ct-2.0`. Its fixes (legend lines, `(s)` headers, page furniture, three-level codes) are tested on synthetic text only. The ≥ 20 real-PV validation in Phase 2 remains the gate before the defect-code suffix may override section headers.
 
 ### Phase 1 adversarial review (2026-10-14)

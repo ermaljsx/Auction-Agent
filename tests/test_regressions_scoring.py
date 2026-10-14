@@ -8,7 +8,7 @@ import pytest
 from auction_agent import db
 from auction_agent.report import generate_report
 from auction_agent.scoring.heuristics import assess, finalize, match_engines, model_family
-from auction_agent.scoring.llm import GeminiClient, LLMTransientError
+from auction_agent.scoring.llm import LLMTransientError, OpenAIClient
 from auction_agent.scoring.service import llm_payload, rescore_all
 from tests.test_scoring import FAV, MAJ, TODAY, facts, fee, score
 from tests.test_service_report import NOW, FakeClient, llm_settings, seed
@@ -109,19 +109,15 @@ def test_network_error_never_skips_the_heuristic_rebuild(settings):
         assert conn.execute("SELECT count(*) FROM assessments").fetchone()[0] == 8
 
 
-def test_gemini_client_wraps_unexpected_errors(monkeypatch):
-    client = GeminiClient.__new__(GeminiClient)
-    client.model, client._thinking_supported = "m", True
-    from google.genai import types
-    client._types = types
-
+def test_openai_client_wraps_unexpected_errors():
     class Boom:
-        class models:
-            @staticmethod
-            def generate_content(**_kw):
-                raise OSError("connection reset")
+        class chat:
+            class completions:
+                @staticmethod
+                def create(**_kw):
+                    raise OSError("connection reset")
 
-    client._client = Boom()
+    client = OpenAIClient("sk-test", "m", sdk_client=Boom())
     with pytest.raises(LLMTransientError):
         client.review([{"key": "1"}])
 
