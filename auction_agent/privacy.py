@@ -48,7 +48,8 @@ _OWNER_FIELD_RE = re.compile(
     re.IGNORECASE | re.MULTILINE,
 )
 _DASHES = dict.fromkeys(map(ord, "‐‑‒–—―−"), "-")
-_MONEY_RE = re.compile(r"\d[\d   .,]*\s*(?:€|EUR\b|euros?\b)(?:\s*(?:HT|TTC)\b)?", re.IGNORECASE)
+_MONEY_RE = re.compile(r"\d[\d   .,]*\s*(?:(?:€|EUR\b|euros?\b)(?:\s*(?:HT|TTC)\b)?|(?:HT|TTC)\b)", re.IGNORECASE)
+_URL_RE = re.compile(r"(?:https?://|www\.)\S+", re.IGNORECASE)
 _PHONE_RE = re.compile(r"(?<!\d)(?:\+33\s?|0)[1-9](?:[\s.\-]?\d{2}){4}(?!\d)")
 _EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
 
@@ -73,10 +74,11 @@ def redact(text: Optional[str]) -> Optional[str]:
 
 
 def scrub_for_llm(text: Optional[str]) -> Optional[str]:
-    """Redact, then also remove amounts, phone numbers and e-mail addresses."""
+    """Redact, then also remove links, amounts, phone numbers and e-mail addresses."""
     out = redact(text)
     if not out:
         return out
+    out = _URL_RE.sub("[LIEN]", out)
     out = _MONEY_RE.sub("[MONTANT]", out)
     out = _PHONE_RE.sub("[TEL]", out)
     return _EMAIL_RE.sub("[EMAIL]", out)

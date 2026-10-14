@@ -66,10 +66,15 @@ class LLMTransientError(RuntimeError):
 
 
 class LLMBatchError(LLMTransientError):
-    """This batch could not be reviewed (refusal, truncation, filter, bad JSON).
+    """This batch could not be reviewed (refusal, truncation, filter, bad JSON, timeout).
 
     Other batches can still go ahead; the cars of this batch are retried one by one.
+    A failed answer may still be billed: its token usage is attached when known.
     """
+
+    tokens_in: Optional[int] = None
+    tokens_out: Optional[int] = None
+    tokens_reasoning: Optional[int] = None
 
 
 @dataclass
@@ -121,14 +126,16 @@ def parse_reviews(raw: str, expected_keys: set[str]) -> dict[str, Review]:
     for item in items:
         if not isinstance(item, dict):
             continue
-        key = str(item.get("key", ""))
+        key = str(item.get("key", "")).strip()
         if key not in expected_keys or key in out:
             continue
         try:
             adj = int(item.get("adjustment", 0))
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             adj = 0
-        reasons = [str(r)[:200] for r in (item.get("reasons") or []) if str(r).strip()][:3]
+        raw_reasons = item.get("reasons")
+        raw_reasons = raw_reasons if isinstance(raw_reasons, list) else []
+        reasons = [str(r)[:200] for r in raw_reasons if str(r).strip()][:3]
         out[key] = Review(key, max(-15, min(5, adj)), reasons, str(item.get("verdict") or "")[:400])
     return out
 
@@ -137,7 +144,8 @@ OPENAI_BASE_URL = "https://api.openai.com/v1"
 # 429 bodies that mean "no money / limit reached": retrying cannot help.
 _BILLING_CODES = frozenset({
     "insufficient_quota", "credit_balance_exhausted", "organization_spend_limit_exceeded",
-    "project_spend_limit_exceeded", "organization_usage_limit_exceeded",
+    "project_spend_limit_exceeded", "organization_usage_limit_exceeded", "usage_limit_exceeded",
+    "billing_not_active",
 })
 _CONTENT_CODES = frozenset({"invalid_prompt", "context_length_exceeded"})
 # Optional request parameters that some models reject: dropped once, then retried.
@@ -165,7 +173,7 @@ class OpenAIClient:
         *,
         reasoning_effort: str = "none",
         timeout_s: float = 120.0,
-        max_retries: int = 2,
+        max_retries: int = 1,
         sdk_client: Any = None,
         http_client: Any = None,
     ):
@@ -174,7 +182,8 @@ class OpenAIClient:
         if not (api_key.isascii() and api_key.isprintable()) or any(c.isspace() or c in "\"'" for c in api_key):
             raise LLMConfigError("OPENAI_API_KEY looks malformed (spaces, quotes or accented characters): paste it again.")
         self.model = model
-        self.reasoning_effort = reasoning_effort
+        self.reasoning_effort = reasoning_effort  # "off": non-reasoning model, parameter not sent
+        self.timeout_s = timeout_s
         self.notes: list[str] = []
         present = [name for name in _SDK_ENV if os.environ.get(name)]
         if present:
@@ -200,6 +209,8 @@ class OpenAIClient:
 
     def _request(self, payloads: list[dict[str, Any]]) -> dict[str, Any]:
         effort = self.reasoning_effort
+        # Counts hidden reasoning tokens too, hence the larger budget above "none".
+        max_tokens = (300 if effort in ("none", "off") else 1200) * len(payloads) + 1000
         kwargs: dict[str, Any] = dict(
             model=self.model,
             messages=[
@@ -210,18 +221,25 @@ class OpenAIClient:
                 "type": "json_schema",
                 "json_schema": {"name": "vehicle_reviews", "strict": True, "schema": RESPONSE_SCHEMA},
             },
-            reasoning_effort=effort,
-            # Counts hidden reasoning tokens too, hence the larger budget above "none".
-            max_completion_tokens=(300 if effort == "none" else 1200) * len(payloads) + 1000,
+            max_completion_tokens=max_tokens,
             store=False,
+            # Long answers need time: never cut off (and pay for) a generation that is
+            # merely slow. About 20 output tokens per second is a conservative floor.
+            timeout=max(self.timeout_s, max_tokens / 20),
         )
-        if effort == "none" and "temperature" not in self._dropped:
+        if effort != "off":
+            kwargs["reasoning_effort"] = effort
+        if effort in ("none", "off") and "temperature" not in self._dropped:
             kwargs["temperature"] = 0  # reasoning models accept it only at effort "none"
         if "prompt_cache_options" not in self._dropped:
             # Explicit mode without breakpoints disables prompt caching: each payload is
             # unique, so caching would only add the cache-write surcharge and retention.
             kwargs["prompt_cache_options"] = {"mode": "explicit"}
         return kwargs
+
+    @staticmethod
+    def _is_timeout(exc: BaseException) -> bool:
+        return any(cls.__name__ == "APITimeoutError" for cls in type(exc).__mro__)
 
     @staticmethod
     def _rejected_param(exc: BaseException) -> Optional[str]:
@@ -254,15 +272,21 @@ class OpenAIClient:
             if param == "reasoning_effort":
                 return LLMConfigError(
                     f"Model {self.model!r} does not accept reasoning effort {self.reasoning_effort!r}: set "
-                    "LLM_REASONING_EFFORT to a value it supports (higher effort costs more)."
+                    "LLM_REASONING_EFFORT to a value it supports (higher effort costs more), or to 'off' "
+                    "for a model without reasoning."
                 )
-            if param == "messages" or codes & _CONTENT_CODES or not param:
+            if param == "messages" or codes & _CONTENT_CODES:
                 return LLMBatchError(f"OpenAI rejected this batch (HTTP 400): {_short(exc)}")
-            return LLMConfigError(f"OpenAI rejected parameter {param!r} for model {self.model!r} (HTTP 400): {_short(exc)}")
+            # Anything else would fail for every batch: stop for this run, mark no car.
+            what = f"parameter {param!r}" if param else "the request"
+            return LLMConfigError(f"OpenAI rejected {what} for model {self.model!r} (HTTP 400): {_short(exc)}")
         if status in (408, 409) or (isinstance(status, int) and status >= 500):
             return LLMTransientError(f"OpenAI temporarily unavailable (HTTP {status}).")
         if isinstance(status, int):
             return LLMConfigError(f"OpenAI rejected the request (HTTP {status}): {_short(exc)}")
+        if self._is_timeout(exc):
+            # Usually a batch too large for the time limit: split it rather than resend it.
+            return LLMBatchError(f"OpenAI did not answer in time ({_short(exc)}).")
         if isinstance(exc, TypeError):  # SDK older than the parameters we send
             return LLMConfigError(f"The installed openai package is too old ({_short(exc)}): pip install -r requirements.txt")
         return LLMTransientError(f"{exc.__class__.__name__}: {_short(exc)}")
@@ -276,30 +300,38 @@ class OpenAIClient:
                 param = self._rejected_param(exc)
                 if param in _DROPPABLE and param not in self._dropped:
                     self._dropped.add(param)  # at most once per parameter: the loop ends
+                    effect = ("OpenAI's default prompt caching applies" if param == "prompt_cache_options"
+                              else "sent without it")
+                    self.notes.append(f"Model {self.model!r} rejected {param!r}; {effect}.")
                     continue
                 raise self._map_error(exc) from exc
         return self._parse(completion, payloads)
 
     def _parse(self, completion: Any, payloads: list[dict[str, Any]]) -> ReviewBatch:
-        choices = getattr(completion, "choices", None) or []
-        if not choices:
-            raise LLMBatchError("OpenAI returned no answer for this batch.")
-        message = getattr(choices[0], "message", None)
-        finish = getattr(choices[0], "finish_reason", None)
-        if getattr(message, "refusal", None):
-            raise LLMBatchError("The model refused to review this batch.")
-        if finish == "length":
-            raise LLMBatchError("The answer was cut off (max_completion_tokens reached).")
-        if finish == "content_filter":
-            raise LLMBatchError("The answer was blocked by OpenAI's content filter.")
-        reviews = parse_reviews(getattr(message, "content", None) or "", {p["key"] for p in payloads})
         # Usage is optional in the SDK types: a missing field never discards paid reviews.
         usage = getattr(completion, "usage", None)
         details = getattr(usage, "completion_tokens_details", None)
-        return ReviewBatch(
-            reviews=reviews,
+        tokens = dict(
             tokens_in=getattr(usage, "prompt_tokens", None),
             tokens_out=getattr(usage, "completion_tokens", None),
             tokens_reasoning=getattr(details, "reasoning_tokens", None),
-            model=getattr(completion, "model", None) or self.model,
         )
+        try:
+            choices = getattr(completion, "choices", None) or []
+            if not choices:
+                raise LLMBatchError("OpenAI returned no answer for this batch.")
+            message = getattr(choices[0], "message", None)
+            finish = getattr(choices[0], "finish_reason", None)
+            if getattr(message, "refusal", None):
+                raise LLMBatchError("The model refused to review this batch.")
+            if finish == "length":
+                hint = "" if self.reasoning_effort in ("none", "off") else "; lower LLM_REASONING_EFFORT"
+                raise LLMBatchError(f"The answer was cut off (max_completion_tokens reached{hint}).")
+            if finish == "content_filter":
+                raise LLMBatchError("The answer was blocked by OpenAI's content filter.")
+            reviews = parse_reviews(getattr(message, "content", None) or "", {p["key"] for p in payloads})
+        except LLMBatchError as exc:  # billed anyway: keep the usage for the record
+            exc.tokens_in, exc.tokens_out, exc.tokens_reasoning = (
+                tokens["tokens_in"], tokens["tokens_out"], tokens["tokens_reasoning"])
+            raise
+        return ReviewBatch(reviews=reviews, model=getattr(completion, "model", None) or self.model, **tokens)

@@ -331,14 +331,15 @@ class AuctionAdapter(ABC):
 - **Client** (changed 2026-10-14 from Gemini to OpenAI at the owner's request):
   - `openai >=3.31,<4` (Python ≥3.10, uses httpx2), imported lazily;
   - Chat Completions with a strict `json_schema` response format (`additionalProperties: false`, every property required; bounds enforced in code);
-  - `reasoning_effort="none"`, `temperature 0` (accepted only at effort `none`), `store=False`, prompt caching off (`prompt_cache_options.mode="explicit"` without breakpoints);
+  - `reasoning_effort="none"`, `temperature 0` (accepted only at effort `none`), `store=False`, prompt caching requested off (`prompt_cache_options.mode="explicit"` without breakpoints; supported from gpt-5.6, a rejection is noted and the option dropped);
   - fixed base URL `https://api.openai.com/v1`, so a stray `OPENAI_BASE_URL` cannot reroute data;
   - in Phase 1, synchronous batches of 20 with `--llm-limit 60`; Batch API (or Flex) in Phase 3.
 - **Configuration:**
   - The key is `OPENAI_API_KEY`, read from the environment or from a git-ignored `.env` file (template: `.env.example`).
   - The model is `LLM_MODEL`, **default `gpt-6-luna`**. This reverses the earlier "no default model" decision: the owner chose the cheapest OpenAI model not scheduled for retirement (medium confidence: prices and deprecations come from search snippets plus the SDK's model list and litellm's price table, all dated 2026-10-14; OpenAI's site was blocked from the sandbox).
-  - `LLM_REASONING_EFFORT` defaults to `none`. A model that rejects it stops the LLM with a clear message instead of falling back to its costlier default.
-  - Billing errors (no credits, spend limit), 401/403/404 and rejected parameters stop the LLM for the run with a clear message; heuristic scoring continues. A refused, truncated or filtered batch is recorded as failed and its cars are retried alone on the next run, then skipped after two failures until their data changes.
+  - `LLM_REASONING_EFFORT` defaults to `none` (`off` omits it for non-reasoning models). A model that rejects it stops the LLM with a clear message instead of falling back to its costlier default.
+  - Per-request timeout scales with the token budget and the SDK retries at most once; a timeout counts as a batch failure (split and retried alone), so a slow batch is never resent and re-billed on every run.
+  - Billing errors (no credits, spend limit), 401/403/404 and rejected parameters stop the LLM for the run with a clear message; heuristic scoring continues. A refused, truncated, filtered or timed-out batch, and any car missing from an answer, is recorded as failed; those cars are retried alone on the next run, then skipped after two failures until their data, the model or the reasoning effort changes.
   - The `GEMINI_PAID_TIER` guard is dropped: OpenAI API data is not used for training unless the organisation opts in (high confidence), and no free tier is usable without credits (medium).
 - **Cost:** about 3.6–3.9k new IDs/week × 40% assumed triggers × (about 1.5k input + 300 output tokens) ≈ **$0.45/week** on `gpt-6-luna` at standard rates ($0.10 / $0.50 per 1M tokens), about half on Batch or Flex. These are unverified snippet prices.
 

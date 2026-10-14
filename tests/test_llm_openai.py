@@ -77,6 +77,7 @@ def test_request_is_strict_unstored_and_cheap():
     assert req["reasoning_effort"] == "none" and req["temperature"] == 0
     assert req["prompt_cache_options"] == {"mode": "explicit"}
     assert req["max_completion_tokens"] == 300 * 2 + 1000
+    assert req["timeout"] == 120.0
     assert req["messages"][0] == {"role": "developer", "content": SYSTEM_PROMPT}
     fmt = req["response_format"]
     assert fmt["type"] == "json_schema" and fmt["json_schema"]["strict"] is True
@@ -93,6 +94,15 @@ def test_higher_effort_drops_temperature_and_raises_the_token_budget():
     req = sdk.requests[0]
     assert req["reasoning_effort"] == "low" and "temperature" not in req
     assert req["max_completion_tokens"] == 1200 * 2 + 1000
+    assert req["timeout"] == (1200 * 2 + 1000) / 20  # long answers get more time
+
+
+def test_effort_off_supports_models_without_reasoning():
+    client, sdk = make(completion(), effort="off")
+    client.review(PAYLOADS)
+    req = sdk.requests[0]
+    assert "reasoning_effort" not in req and req["temperature"] == 0
+    assert req["max_completion_tokens"] == 300 * 2 + 1000
 
 
 def _walk(node):
@@ -127,6 +137,19 @@ def test_trailing_junk_after_json_is_tolerated():
         parse_reviews("not json", {"1"})
 
 
+def test_out_of_spec_values_are_neutralised():
+    raw = '{"items": [{"key": " 1 ", "adjustment": 1e400, "reasons": "Coucou", "verdict": "ok"}]}'
+    review = parse_reviews(raw, {"1"})["1"]
+    assert review.adjustment == 0 and review.reasons == []
+
+
+def test_failed_answer_keeps_its_billed_usage():
+    client, _ = make(completion(finish="length", use=usage(prompt=900, completion=7000, reasoning=6500)), effort="low")
+    with pytest.raises(LLMBatchError, match="LLM_REASONING_EFFORT") as info:
+        client.review(PAYLOADS)
+    assert (info.value.tokens_in, info.value.tokens_out, info.value.tokens_reasoning) == (900, 7000, 6500)
+
+
 @pytest.mark.parametrize("answer", [
     completion(refusal="I can't help with that."),
     completion(finish="length"),
@@ -147,16 +170,22 @@ def test_unusable_answers_are_batch_errors(answer):
     (ApiError(403), LLMConfigError, "403"),
     (ApiError(404), LLMConfigError, "LLM_MODEL"),
     (ApiError(429, type="insufficient_quota", code="insufficient_quota"), LLMConfigError, "credits"),
-    (ApiError(429, type="insufficient_quota", code="project_spend_limit_exceeded"), LLMConfigError, "limit"),
+    (ApiError(429, code="project_spend_limit_exceeded"), LLMConfigError, "limit"),
+    (ApiError(429, code="organization_spend_limit_exceeded"), LLMConfigError, "limit"),
+    (ApiError(429, code="organization_usage_limit_exceeded"), LLMConfigError, "limit"),
+    (ApiError(429, code="billing_not_active"), LLMConfigError, "credits"),
     (ApiError(429, code="credit_balance_exhausted"), LLMConfigError, "credits"),
+    (ApiError(400, code="unsupported_parameter", message="Unknown parameter"), LLMConfigError, "the request"),
     (ApiError(400, param="response_format", message="Invalid schema"), LLMConfigError, "response_format"),
     (ApiError(422), LLMConfigError, "422"),
     (ApiError(400, code="invalid_prompt", message="flagged"), LLMBatchError, "batch"),
+    (ApiError(400, code="invalid_prompt", param="input", message="flagged"), LLMBatchError, "batch"),
     (ApiError(400, code="context_length_exceeded", param="messages"), LLMBatchError, "batch"),
     (ApiError(429, type="requests", code="rate_limit_exceeded"), LLMTransientError, "rate limit"),
     (ApiError(500), LLMTransientError, "500"),
     (ApiError(503), LLMTransientError, "503"),
     (TimeoutError("read timed out"), LLMTransientError, "TimeoutError"),
+    (type("APITimeoutError", (Exception,), {})("Request timed out."), LLMBatchError, "in time"),
     (TypeError("create() got an unexpected keyword argument 'prompt_cache_options'"), LLMConfigError, "too old"),
 ])
 def test_errors_are_mapped(error, expected, hint):
@@ -176,6 +205,12 @@ def test_rejected_optional_parameter_is_dropped_once(param):
     sdk.outcomes.append(completion())
     client.review(PAYLOADS)
     assert param not in sdk.requests[2]  # remembered for the rest of the run
+
+
+def test_rejected_parameter_named_only_in_the_message_is_dropped_and_noted():
+    client, sdk = make(ApiError(400, param=None, message="Unsupported parameter: 'prompt_cache_options'"), completion())
+    assert client.review(PAYLOADS).reviews and "prompt_cache_options" not in sdk.requests[1]
+    assert any("prompt caching" in n for n in client.notes)
 
 
 def test_parameter_fallback_is_bounded():
@@ -267,6 +302,29 @@ def test_real_sdk_sends_the_expected_request(monkeypatch):
     assert batch.reviews["1"].adjustment == -2 and batch.tokens_in == 900 and batch.model == "gpt-6-luna-2026-09-22"
 
 
+def test_real_sdk_timeout_is_a_batch_error_and_retries_are_limited():
+    import httpx2
+
+    attempts = []
+
+    def handler(request):
+        attempts.append(request)
+        raise httpx2.ReadTimeout("timed out", request=request)
+
+    client = _real_client(handler)
+    try:
+        with pytest.raises(LLMBatchError, match="in time"):
+            client.review(PAYLOADS)
+    finally:
+        client._client.close()
+    assert len(attempts) == 1
+    default = OpenAIClient("sk-test", "gpt-6-luna")
+    try:
+        assert default._client.max_retries == 1  # a timed-out generation is billed: resend at most once
+    finally:
+        default._client.close()
+
+
 def test_real_sdk_quota_error_is_a_config_error():
     handler = Recorder((429, _error_body("You exceeded your current quota", "insufficient_quota", "insufficient_quota")))
     client = _real_client(handler)
@@ -312,38 +370,115 @@ def _rows(conn, status):
     return conn.execute("SELECT vehicle_id, llm_input_hash FROM llm_assessments WHERE status = ?", (status,)).fetchall()
 
 
+def _probe_keys(conn, s):
+    probe = FakeClient()
+    rescore_all(conn, s, today=TODAY, now=NOW, client=probe)
+    conn.execute("DELETE FROM llm_assessments")
+    return [p["key"] for batch in probe.calls for p in batch], len(probe.calls)
+
+
 def test_a_failed_batch_does_not_stop_the_others_and_is_retried_alone(settings):
     s = llm_settings(settings).replace(llm_batch_size=2)
     with db.open_db(s.db_path) as conn:
         seed(conn)
-        probe = FakeClient()
-        rescore_all(conn, s, today=TODAY, now=NOW, client=probe, use_llm=True)
-        keys = [p["key"] for batch in probe.calls for p in batch]
-        conn.execute("DELETE FROM llm_assessments")
-        assert len(keys) >= 3, "the seed must trigger at least two batches"
+        keys, n_batches = _probe_keys(conn, s)
+        assert n_batches >= 2, "the seed must trigger at least two batches"
 
-        bad = keys[0]
-        first = BatchFailClient({bad})
+        first = BatchFailClient({keys[0]})
         out = rescore_all(conn, s, today=TODAY, now=NOW, client=first)
-        assert len(first.calls) == len(probe.calls)  # every batch was still attempted
+        assert len(first.calls) == n_batches  # every batch was still attempted
         assert len(_rows(conn, "failed")) == 2  # the whole first batch is marked failed
         assert any("could not review" in n for n in out["notes"])
 
-        second = FakeClient()
+        # Next run: each failed car is sent alone; keys[0] fails again, keys[1] succeeds.
+        second = BatchFailClient({keys[0]})
         rescore_all(conn, s, today=TODAY, now=NOW, client=second)
-        assert [len(c) for c in second.calls] == [1, 1]  # each failed car retried alone
+        assert sorted(len(c) for c in second.calls) == [1, 1]
+        assert conn.execute("SELECT count(*) FROM llm_assessments WHERE status = 'failed'").fetchone()[0] == 3
 
-        # A car that fails twice on the same data is not sent again.
-        conn.execute("DELETE FROM llm_assessments WHERE status = 'ok'")
-        with db.write_tx(conn):
-            conn.execute("INSERT INTO llm_assessments (vehicle_id, kind, llm_input_hash, prompt_version, llm_model, "
-                         "status, error, created_at) SELECT vehicle_id, kind, llm_input_hash, prompt_version, "
-                         "llm_model, 'failed', 'x', created_at FROM llm_assessments WHERE status = 'failed'")
+        # Third run: keys[0] failed twice on the same data and settings, so it is not sent.
         third = FakeClient()
         out = rescore_all(conn, s, today=TODAY, now=NOW, client=third)
-        sent = {p["key"] for batch in third.calls for p in batch}
-        assert keys[0] not in sent and keys[1] not in sent
-        assert any("failed on twice" in n for n in out["notes"])
+        assert third.calls == [] and any("failed on twice" in n for n in out["notes"])
+
+        # Changing the reasoning effort (the usual fix) gives it a fresh start.
+        fourth = FakeClient()
+        rescore_all(conn, s.replace(llm_reasoning_effort="low"), today=TODAY, now=NOW, client=fourth)
+        assert [[p["key"] for p in c] for c in fourth.calls] == [[keys[0]]]
+
+
+class OmittingClient(FakeClient):
+    """Answers correctly but leaves one car out of the items."""
+
+    def __init__(self, omit, **kw):
+        super().__init__(**kw)
+        self.omit = omit
+
+    def review(self, payloads):
+        batch = super().review(payloads)
+        batch.reviews.pop(self.omit, None)
+        return batch
+
+
+def test_a_car_missing_from_the_answer_is_retried_alone_then_given_up(settings):
+    s = llm_settings(settings)
+    with db.open_db(s.db_path) as conn:
+        seed(conn)
+        keys, _ = _probe_keys(conn, s)
+        lost = keys[0]
+        out = rescore_all(conn, s, today=TODAY, now=NOW, client=OmittingClient(lost))
+        assert any("no review for 1 vehicle" in n for n in out["notes"])
+        again = OmittingClient(lost)
+        rescore_all(conn, s, today=TODAY, now=NOW, client=again)
+        assert [[p["key"] for p in c] for c in again.calls] == [[lost]]
+        last = FakeClient()
+        rescore_all(conn, s, today=TODAY, now=NOW, client=last)
+        assert last.calls == []
+
+
+class BilledFailureClient(FakeClient):
+    def review(self, payloads):
+        self.calls.append(payloads)
+        exc = LLMBatchError("The answer was cut off (max_completion_tokens reached).")
+        exc.tokens_in, exc.tokens_out, exc.tokens_reasoning = 900, 7000, 6500
+        raise exc
+
+
+def test_usage_of_a_failed_batch_is_recorded(settings):
+    s = llm_settings(settings)
+    with db.open_db(s.db_path) as conn:
+        seed(conn)
+        out = rescore_all(conn, s, today=TODAY, now=NOW, client=BilledFailureClient())
+        assert any("6500 hidden reasoning tokens" in n for n in out["notes"])
+        rows = conn.execute("SELECT tokens_in, tokens_out FROM llm_assessments WHERE status = 'failed' "
+                            "ORDER BY id").fetchall()
+        assert tuple(rows[0]) == (900, 7000) and all(r[0] is None for r in rows[1:])
+
+
+def test_client_is_built_from_settings(settings, monkeypatch):
+    built = []
+
+    class Recording(FakeClient):
+        def __init__(self, api_key, model, *, reasoning_effort):
+            super().__init__()
+            built.append((api_key, model, reasoning_effort))
+            self.model, self.reasoning_effort, self.notes = model, reasoning_effort, ["env note"]
+
+    monkeypatch.setattr("auction_agent.scoring.service.OpenAIClient", Recording)
+    s = settings.replace(openai_api_key="sk-x", llm_model="gpt-5.4-nano", llm_reasoning_effort="low")
+    with db.open_db(s.db_path) as conn:
+        seed(conn)
+        out = rescore_all(conn, s, today=TODAY, now=NOW)
+    assert built == [("sk-x", "gpt-5.4-nano", "low")] and "env note" in out["notes"]
+
+
+def test_malformed_key_falls_back_to_rules(settings):
+    s = settings.replace(openai_api_key="sk bad key")
+    with db.open_db(s.db_path) as conn:
+        seed(conn)
+        out = rescore_all(conn, s, today=TODAY, now=NOW)
+        assert any("malformed" in n for n in out["notes"]) and "sk bad key" not in " ".join(out["notes"])
+        assert conn.execute("SELECT count(*) FROM assessments").fetchone()[0] == 8
 
 
 class ReasoningClient(FakeClient):

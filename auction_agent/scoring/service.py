@@ -225,11 +225,19 @@ def rescore_all(
     llm_calls = llm_cached = 0
     pending = [t for t in triggered if (t[0].facts.vehicle_id, t[3]) not in cache]
     llm_cached = len(triggered) - len(pending)
-    given_up = [t for t in pending if failures.get((t[0].facts.vehicle_id, t[3]), 0) >= MAX_LLM_FAILURES]
+    # Failures are counted per payload *and* request settings: changing the model or the
+    # reasoning effort (the usual fix for a failing batch) gives every car a fresh start.
+    effort_tag = getattr(client, "reasoning_effort", None) or settings.llm_reasoning_effort
+    fail_hash = {id(t): payload_hash(t[2], f"{model_name}|{effort_tag}") for t in pending}
+
+    def failed_before(t: tuple) -> int:
+        return failures.get((t[0].facts.vehicle_id, fail_hash[id(t)]), 0)
+
+    given_up = [t for t in pending if failed_before(t) >= MAX_LLM_FAILURES]
     if given_up:
         pending = [t for t in pending if t not in given_up]
         notes.append(f"LLM review skipped for {len(given_up)} vehicle(s) it already failed on twice "
-                     "(retried when their data, the model or the prompt changes).")
+                     "(retried when their data, the model, the reasoning effort or the prompt changes).")
     if use_llm and pending:
         if client is None and settings.llm_enabled:
             try:
@@ -237,8 +245,6 @@ def rescore_all(
                                       reasoning_effort=settings.llm_reasoning_effort)
             except LLMConfigError as exc:
                 notes.append(str(exc))
-            else:
-                notes.extend(client.notes)
         elif client is None:
             notes.append(f"LLM review skipped for {len(pending)} vehicle(s): set OPENAI_API_KEY "
                          "(copy .env.example to .env and paste your key).")
@@ -248,12 +254,23 @@ def rescore_all(
             if len(pending) > len(todo):
                 notes.append(f"LLM budget reached: {len(pending) - len(todo)} vehicle(s) left for a later run.")
             # A car whose batch failed once is retried alone, so it cannot sink others again.
-            retries = [t for t in todo if failures.get((t[0].facts.vehicle_id, t[3]))]
-            fresh = [t for t in todo if not failures.get((t[0].facts.vehicle_id, t[3]))]
+            retries = [t for t in todo if failed_before(t)]
+            fresh = [t for t in todo if not failed_before(t)]
             chunks = [[t] for t in retries] + [
                 fresh[i : i + settings.llm_batch_size] for i in range(0, len(fresh), settings.llm_batch_size)
             ]
-            reasoning_tokens = 0
+            reasoning_tokens = missing = 0
+
+            def record_failed(items: list, error: str, tokens: tuple = (None, None)) -> None:
+                for i, t in enumerate(items):
+                    conn.execute(
+                        """INSERT INTO llm_assessments (vehicle_id, kind, llm_input_hash, prompt_version,
+                               llm_model, status, error, tokens_in, tokens_out, created_at)
+                           VALUES (?, ?, ?, ?, ?, 'failed', ?, ?, ?, ?)""",
+                        (t[0].facts.vehicle_id, t[1], fail_hash[id(t)], PROMPT_VERSION, client.model, error[:300],
+                         tokens[0] if i == 0 else None, tokens[1] if i == 0 else None, now_s),
+                    )
+
             for chunk in chunks:
                 try:
                     batch = client.review([t[2] for t in chunk])
@@ -262,14 +279,9 @@ def rescore_all(
                     break
                 except LLMBatchError as exc:
                     llm_calls += 1
+                    reasoning_tokens += exc.tokens_reasoning or 0
                     with db.write_tx(conn):
-                        for part, kind, payload, h in chunk:
-                            conn.execute(
-                                """INSERT INTO llm_assessments (vehicle_id, kind, llm_input_hash, prompt_version,
-                                       llm_model, status, error, created_at)
-                                   VALUES (?, ?, ?, ?, ?, 'failed', ?, ?)""",
-                                (part.facts.vehicle_id, kind, h, PROMPT_VERSION, client.model, str(exc)[:300], now_s),
-                            )
+                        record_failed(chunk, str(exc), (exc.tokens_in, exc.tokens_out))
                     notes.append(f"LLM could not review {len(chunk)} vehicle(s): {exc}")
                     continue
                 except LLMTransientError as exc:
@@ -283,6 +295,11 @@ def rescore_all(
                 answered_by = getattr(batch, "model", None) or client.model
                 first_row = True
                 with db.write_tx(conn):
+                    # A car left out of an otherwise valid answer counts as a failure too,
+                    # so it is retried alone and eventually given up instead of resent forever.
+                    left_out = [t for t in chunk if t[2]["key"] not in batch.reviews]
+                    record_failed(left_out, "no review returned for this vehicle")
+                    missing += len(left_out)
                     for part, kind, payload, h in chunk:
                         review = batch.reviews.get(payload["key"])
                         if review is None:
@@ -303,9 +320,12 @@ def rescore_all(
                         cache[(part.facts.vehicle_id, h)] = conn.execute(
                             "SELECT * FROM llm_assessments WHERE id = last_insert_rowid()"
                         ).fetchone()
+            if missing:
+                notes.append(f"The model returned no review for {missing} vehicle(s); they are retried alone next run.")
             if reasoning_tokens:
                 notes.append(f"The model used {reasoning_tokens} hidden reasoning tokens (billed as output): "
                              "check LLM_REASONING_EFFORT.")
+            notes.extend(getattr(client, "notes", []) or [])
 
     # ------------------------------------------------------------------ final pass
     verdicts: dict[int, Optional[str]] = {}

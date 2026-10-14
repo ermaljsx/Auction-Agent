@@ -85,6 +85,12 @@ def test_llm_scrub_removes_prices_phones_and_mail():
     assert "€" not in out and "06 12" not in out and "@" not in out and "ab-123-cd" not in out
 
 
+def test_llm_scrub_removes_links_and_ht_amounts():
+    out = scrub_for_llm("Photos sur https://www.alcopa-auction.fr/x?id=12 ou www.garage.fr/p ; reprise 6 900 HT")
+    assert "http" not in out and "www." not in out and "6 900" not in out
+    assert scrub_for_llm("Moteur 1.6 HDi 110 ch, 120 000 km, boîte HS") == "Moteur 1.6 HDi 110 ch, 120 000 km, boîte HS"
+
+
 # ------------------------------------------------------------------ CT parser (parsing-3, 8, 9, 11)
 
 def test_page_furniture_does_not_end_the_section():

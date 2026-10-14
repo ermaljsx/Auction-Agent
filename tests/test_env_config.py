@@ -128,3 +128,21 @@ def test_notes_with_markup_characters_do_not_crash_the_cli(monkeypatch, tmp_path
                                          "llm_cached": 0, "notes": ["OpenAI said [/bold] [red]oops"]})
     assert cli.main(["score", "--no-llm"]) == 0
     assert "[/bold] [red]oops" in capsys.readouterr().out
+
+
+def test_inline_comments_and_repeated_names(tmp_path):
+    path = tmp_path / ".env"
+    path.write_text("OPENAI_API_KEY=sk-old\nBUYER_PROFILE=pro   # pro buyer\nLLM_MODEL=\"gpt-6-luna\" # default\n"
+                    "LLM_REASONING_EFFORT='none # really'\nURL=a#b\nOPENAI_API_KEY=sk-new # rotated\n", encoding="utf-8")
+    env: dict = {}
+    report = load_env_file(path, env)
+    assert env["BUYER_PROFILE"] == "pro" and env["LLM_MODEL"] == "gpt-6-luna" and env["URL"] == "a#b"
+    assert env["LLM_REASONING_EFFORT"] == "none # really"  # quoted text is kept as written
+    assert env["OPENAI_API_KEY"] == "sk-new"  # last line wins, like python-dotenv
+    assert any("line 6" in w and "OPENAI_API_KEY" in w for w in report.warnings)
+    assert "sk-old" not in " ".join(report.warnings) and "sk-new" not in " ".join(report.warnings)
+
+
+def test_effort_off_is_a_valid_setting(monkeypatch, tmp_path):
+    monkeypatch.setenv("LLM_REASONING_EFFORT", "off")
+    assert Settings.from_env(data_dir=tmp_path).llm_reasoning_effort == "off"

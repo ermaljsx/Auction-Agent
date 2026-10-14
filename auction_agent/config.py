@@ -34,7 +34,8 @@ DEFAULT_SALE_URL = (
 # Cheapest OpenAI model not scheduled for retirement as of 2026-10-14 (prices and
 # deprecations: see README "Optional: OpenAI review"). Override with LLM_MODEL.
 DEFAULT_LLM_MODEL = "gpt-6-luna"
-REASONING_EFFORTS = ("none", "minimal", "low", "medium", "high", "xhigh", "max")
+# "off" leaves the parameter out, for models without reasoning.
+REASONING_EFFORTS = ("off", "none", "minimal", "low", "medium", "high", "xhigh", "max")
 
 DEFAULT_USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -108,6 +109,17 @@ def clean_secret(value: Optional[str]) -> str:
 # --------------------------------------------------------------------------- .env file
 
 _ENV_KEY_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+_ENV_QUOTED_RE = re.compile(r"""(["'])(.*?)\1\s*(?:#.*)?$""")
+_ENV_COMMENT_RE = re.compile(r"\s+#")
+
+
+def _env_value(raw: str) -> str:
+    """Value of a .env line: text inside quotes, else up to an inline " # comment"."""
+    raw = raw.strip()
+    quoted = _ENV_QUOTED_RE.match(raw)
+    if quoted:
+        return quoted.group(2).strip()
+    return _ENV_COMMENT_RE.split(raw, maxsplit=1)[0].strip()
 
 
 @dataclass
@@ -137,8 +149,9 @@ def load_env_file(
     """Load ``KEY=value`` lines from the git-ignored ``.env`` file.
 
     A variable that is already set (non-empty) in the environment always wins, so a
-    shell or Task Scheduler setting can override the file. Problems with the file are
-    reported as warnings and never stop the program: the LLM is optional.
+    shell or Task Scheduler setting can override the file. Within the file, the last
+    line for a name wins. Problems with the file are reported as warnings and never
+    stop the program: the LLM is optional.
     """
     env = os.environ if environ is None else environ
     path = Path(path) if path is not None else env_file_path()
@@ -169,11 +182,16 @@ def load_env_file(
         if not sep or not _ENV_KEY_RE.fullmatch(key):
             report.warnings.append(f"{path.name} line {number} ignored (expected KEY=value).")
             continue
-        value = _unquote(value)
+        value = _env_value(value)
         if not value:
             continue
+        if key in report.loaded:
+            report.warnings.append(f"{path.name} line {number}: {key} is set twice; this line wins.")
+            env[key] = value
+            continue
         if env.get(key):
-            report.kept_existing.append(key)
+            if key not in report.kept_existing:
+                report.kept_existing.append(key)
             continue
         env[key] = value
         report.loaded.append(key)

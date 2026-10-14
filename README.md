@@ -46,7 +46,8 @@ python run_crawl.py --pages 1 --limit 10
 # A specific sale (each Alcopa sale has its own id in the URL)
 python run_crawl.py --url /salle-de-vente-encheres/beauvais/13026
 
-# Score every vehicle and open the report (heuristics only, no API key needed)
+# Score every vehicle and open the report (rules only without an API key; with OPENAI_API_KEY
+# set it also runs the AI review: add --no-llm to skip it)
 python run_advisor.py --open
 python run_advisor.py --max-price 12000 --open   # all-in budget, euros
 python run_advisor.py --sale-id 3 --open         # one sale: id from `python -m auction_agent stats`
@@ -65,7 +66,7 @@ python -m auction_agent cleanup-legacy --yes --delete-backups
 ```
 
 ### Optional: OpenAI review
-The AI writes short verdicts for the best cars and reviews cars near a tier boundary (adjustment bounded to −15…+5). It never overrides a 🔴 gate, and it never receives prices, VINs, plates, phone numbers, e-mails or URLs. Without a key, everything works with the rules only.
+The AI writes short verdicts for the best cars and reviews cars near a tier boundary (adjustment bounded to −15…+5). It never overrides a 🔴 gate. It receives specs, parsed CT defects and seller comments with VINs, plates, amounts in euros (or HT/TTC), phone numbers, e-mails and links removed; never the price, the listing URL or the raw CT text. Without a key, everything works with the rules only.
 
 **1. Prepare your OpenAI account** (one time, on platform.openai.com):
 - Add prepaid credits (the minimum was reported as $5). **Auto-recharge is on by default**: switch it off or cap it.
@@ -80,15 +81,16 @@ copy .env.example .env
 notepad .env
 ```
 
-PowerShell: `Copy-Item .env.example .env; notepad .env`. Paste your key after `OPENAI_API_KEY=` (no quotes needed) and save. Make sure Windows did not save it as `.env.txt`; the app warns you if it did. `.env` is git-ignored, so the key never goes to GitHub. Never put the key in `.env.example`, which is committed. A variable already set in your system environment (e.g. with `setx`) takes precedence over `.env`.
+PowerShell: `Copy-Item .env.example .env; notepad .env`. Paste your key after `OPENAI_API_KEY=` (no quotes needed; a ` # comment` after it is ignored) and save. Make sure Windows did not save it as `.env.txt`; the app warns you if it did. `.env` is git-ignored, so the key never goes to GitHub. Never put the key in `.env.example`, which is committed. A variable already set in your system environment (e.g. with `setx`) takes precedence over `.env`.
 
 **3. Check it with a small run:**
 
 ```bash
 python -m auction_agent score --llm-limit 5
+python -m auction_agent report --open
 ```
 
-The first line says which model runs and where the key came from (`key from .env`, `key from the environment` or `key not set`); the key itself is never printed. Then read a few French verdicts in the report before raising the limit.
+The first line of `score` says which model runs and where the key came from (`key from .env`, `key from the environment` or `key not set`); the key itself is never printed. `report` writes the report without scoring again. Read a few French verdicts ("Avis IA") before raising the limit.
 
 **Model and cost** (prices and dates from OpenAI's pricing and deprecation pages as reported by search results and price tables on 2026-10-14; OpenAI's site could not be opened directly, so check the current figures on platform.openai.com):
 - `gpt-6-luna` is the cheapest OpenAI model not scheduled for retirement: $0.10 per 1M input tokens and $0.50 per 1M output tokens. `gpt-5-nano` costs less per token but shuts down on 2026-12-11, and `gpt-4.1-nano` on 2026-10-23.
@@ -96,7 +98,7 @@ The first line says which model runs and where the key came from (`key from .env
 - Estimated cost: about **$0.004 per run of 60 cars** (about $0.02 with conservative token estimates). Cars already reviewed cost nothing on later runs. Your hard spend limit is the real cap.
 - `gpt-6-luna` has no dated snapshot, so OpenAI can change its behaviour under the same name; the model that actually answered is stored with each review.
 
-**Data:** OpenAI does not train on API data unless you opt in. It may keep requests for up to 30 days for abuse monitoring, and processing happens in the US (EU data residency requires OpenAI's approval). The app sends `store=false` and turns prompt caching off. *Not legal advice.*
+**Data:** OpenAI does not train on API data unless you opt in. It may keep requests for up to 30 days for abuse monitoring, and processing happens in the US (EU data residency requires OpenAI's approval). The app sends `store=false` and asks OpenAI not to use prompt caching (an option supported from the gpt-5.6 generation; if a model rejects it, the run prints a note). *Not legal advice.*
 
 If the key, model or credits are wrong, scoring continues with the rules only and prints a message saying what to fix. `GEMINI_*` variables from earlier versions are no longer read.
 
@@ -122,7 +124,7 @@ Every variable can also go in the `.env` file (one `NAME=value` per line).
 | `IDENTITY_HMAC_KEY` | auto | Key for VIN hashing (hex, at least 32 bytes); otherwise generated once in `data/identity.key`. Never change it on an existing database |
 | `OPENAI_API_KEY` | unset | Enables the optional AI review. Put it in `.env` (see above) |
 | `LLM_MODEL` | `gpt-6-luna` | OpenAI model for the AI review |
-| `LLM_REASONING_EFFORT` | `none` | `none`, `minimal`, `low`, `medium`, `high`, `xhigh` or `max`; anything above `none` costs more |
+| `LLM_REASONING_EFFORT` | `none` | `none`, `minimal`, `low`, `medium`, `high`, `xhigh` or `max` (anything above `none` costs more), or `off` for a model without reasoning |
 | `LLM_LIMIT` | `60` | Maximum vehicles sent to the AI per run |
 | `AUCTION_AGENT_ENV_FILE` | `.env` | Settings file read at start-up (values already in the environment win) |
 
