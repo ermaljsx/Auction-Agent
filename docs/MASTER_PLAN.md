@@ -525,3 +525,12 @@ See the commit history on `claude/relaxed-albattani-3w9fgh` and the README "Arch
 - Every crawl is `scoped` (one sale), so no car is ever marked missing or purged. The lifecycle engine is Phase 2.
 - Alcopa selectors are ported from the original prototype and tested against synthetic fixtures built from third-party-quoted markup. They must be re-validated on real captured pages (`cli capture`).
 - The LLM is optional and runs only on triggers. It needs `GEMINI_API_KEY`, `GEMINI_MODEL` and `GEMINI_PAID_TIER=1`.
+- Redirects are followed by hand. Every hop is robots-checked and throttled, but a redirect to another host is not refused, because the CT links' real redirect behaviour is unknown until recon. Decide in Phase 2.
+- The Gemini call sets a zero thinking budget and retries once without it if the model rejects the setting. The real behaviour of the model id the owner picks is unverified.
+- CT parser v2 is still `ct-2.0`. Its fixes (legend lines, `(s)` headers, page furniture, three-level codes) are tested on synthetic text only. The ≥ 20 real-PV validation in Phase 2 remains the gate before the defect-code suffix may override section headers.
+
+### Phase 1 adversarial review (2026-10-14)
+A read-only review in five dimensions (storage, parsing, security/network, scoring, plan conformance), each with its own verifier, reported 58 findings. The verifier confirmed all of them; some overlap across dimensions.
+- Every finding has a fix in `fix: address Phase 1 review findings`, with tests in `tests/test_regressions_*.py`.
+- 94 of the 103 new tests fail on the pre-fix commit `d1b1e3d`. The other 9 are guard cases that must pass on both versions, for example "a CT defect line is not redacted".
+- Two findings are only partly addressed: cross-host redirects (above), and the request for tests on real captured pages, which needs the owner to run `cli capture`.

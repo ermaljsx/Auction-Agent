@@ -85,7 +85,7 @@
     {% for r in c.reasons %}<li>{{ r.text }} <span class="src">({{ r.src }})</span></li>{% endfor %}
   </ul>
   {% endif %}
-  {% if c.tier == 'red' and c.gates %}
+  {% if c.gates %}
   <ul>
     {% for g in c.gates %}<li><strong>{{ g.text }}</strong></li>{% endfor %}
   </ul>
@@ -95,8 +95,10 @@
 </article>
 {% endmacro %}
 
+{% for n in notes %}<p class="chip">{{ n }}</p>{% endfor %}
+
 {% if top %}
-<h2>Les meilleures affaires</h2>
+<h2>Les meilleures affaires (ventes des 7 prochains jours)</h2>
 <div class="grid">{% for c in top %}{{ card(c) }}{% endfor %}</div>
 {% endif %}
 

@@ -15,13 +15,13 @@ import json
 import os
 import sqlite3
 from contextlib import closing, contextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Iterable, Iterator, Optional, Sequence
 
 from .config import utc_iso
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 _TS = "GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'"
 
@@ -260,19 +260,31 @@ def is_legacy_v1(db_path: Path) -> bool:
 
 
 def retire_legacy_database(db_path: Path, now: Optional[datetime] = None) -> Optional[Path]:
-    """Move a v1 prototype database aside after stripping VIN and plate columns.
+    """Move a v1 prototype database aside after removing identifying data.
 
-    The v1 file is a re-crawlable cache, so it is not migrated in place. Returns the
-    backup path, or None when there was nothing to retire.
+    The prototype stored VIN and plate columns, raw (unredacted) CT text, free-text
+    comments and photo URLs. All of that is cleared before the file is kept as a
+    backup; only specs, prices and scores remain. Returns the backup path, or None.
     """
     if not is_legacy_v1(db_path):
         return None
     with closing(sqlite3.connect(str(db_path))) as conn:
-        cols = {r[1] for r in conn.execute("PRAGMA table_info('vehicles')")}
-        sets = [f"{c} = NULL" for c in ("vin", "registration") if c in cols]
-        if sets:
-            conn.execute(f"UPDATE vehicles SET {', '.join(sets)}")
-            conn.commit()
+
+        def columns(table: str) -> set[str]:
+            return {r[1] for r in conn.execute(f"PRAGMA table_info('{table}')")}
+
+        scrub = {
+            "vehicles": ("vin", "registration", "comments", "image_url"),
+            "documents": ("extracted_text", "local_path"),
+        }
+        for table, wanted in scrub.items():
+            present = columns(table)
+            sets = [f"{c} = NULL" for c in wanted if c in present]
+            if sets:
+                conn.execute(f"UPDATE {table} SET {', '.join(sets)}")
+        if columns("photos"):
+            conn.execute("DELETE FROM photos")
+        conn.commit()
         conn.execute("VACUUM")
     stamp = utc_iso(now).replace("-", "").replace(":", "")
     backup = db_path.with_name(f"auction.v1-{stamp}.db")
@@ -286,23 +298,37 @@ def retire_legacy_database(db_path: Path, now: Optional[datetime] = None) -> Opt
     return backup
 
 
+# Forward migrations: target version -> statements. Applied in order inside one transaction.
+MIGRATIONS: dict[int, list[str]] = {
+    3: [
+        f"ALTER TABLE vehicles ADD COLUMN {_ts('late_ct_checked_at')}",
+        "ALTER TABLE vehicles ADD COLUMN doc_attempts INTEGER NOT NULL DEFAULT 0",
+    ],
+}
+
+
 def migrate(conn: sqlite3.Connection) -> None:
-    version = conn.execute("PRAGMA user_version").fetchone()[0]
-    if version == SCHEMA_VERSION:
-        _ensure_auto_vacuum(conn)
-        return
-    if version != 0:
-        raise RuntimeError(f"Unknown schema version {version}; expected {SCHEMA_VERSION}")
-    existing = conn.execute("SELECT count(*) FROM sqlite_master WHERE type = 'table'").fetchone()[0]
-    if existing:
-        raise LegacyDatabaseError(
-            "Database has tables but no schema version; run `python -m auction_agent "
-            "cleanup-legacy` or point AUCTION_AGENT_DB to a new file."
-        )
+    """Create or upgrade the schema. Re-checks the version under the write lock, so two
+    processes opening a new database at the same time cannot both run the DDL."""
     with write_tx(conn):
-        for statement in _split_sql(SCHEMA_V2):
-            conn.execute(statement)
-        conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+        version = conn.execute("PRAGMA user_version").fetchone()[0]
+        if version > SCHEMA_VERSION:
+            raise RuntimeError(f"Database schema v{version} is newer than this code (v{SCHEMA_VERSION})")
+        if version == 0:
+            existing = conn.execute("SELECT count(*) FROM sqlite_master WHERE type = 'table'").fetchone()[0]
+            if existing:
+                raise LegacyDatabaseError(
+                    "Database has tables but no schema version; run `python -m auction_agent "
+                    "cleanup-legacy` or point AUCTION_AGENT_DB to a new file."
+                )
+            for statement in _split_sql(SCHEMA_V2):
+                conn.execute(statement)
+            version = 2
+        for target in range(version + 1, SCHEMA_VERSION + 1):
+            for statement in MIGRATIONS[target]:
+                conn.execute(statement)
+        if version != SCHEMA_VERSION:
+            conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
     _ensure_auto_vacuum(conn)
 
 
@@ -548,38 +574,49 @@ def update_vehicle_detail(
     conn.execute(f"UPDATE vehicles SET {', '.join(sets)} WHERE id = :id", params)
 
 
-def set_ingest_state(
-    conn: sqlite3.Connection,
-    vehicle_id: int,
-    *,
-    state: str,
-    now: str,
-    error: Optional[str] = None,
-    next_attempt_at: Optional[str] = None,
-    detail_fetched: bool = False,
-    ct_state: Optional[str] = None,
+def mark_complete(
+    conn: sqlite3.Connection, vehicle_id: int, *, ct_state: Optional[str], docs_ok: bool = True
 ) -> None:
+    """Successful ingest: clears the retry state. ``ct_state`` None keeps the stored value."""
     conn.execute(
-        """
-        UPDATE vehicles SET
-            ingest_state = :state,
-            ingest_attempts = CASE WHEN :state = 'failed' THEN ingest_attempts + 1 ELSE 0 END,
-            next_attempt_at = :next_attempt_at,
-            last_error = :error,
-            detail_fetched_at = CASE WHEN :detail_fetched THEN :now ELSE detail_fetched_at END,
-            ct_state = COALESCE(:ct_state, ct_state)
-        WHERE id = :id
-        """,
-        {
-            "id": vehicle_id,
-            "state": state,
-            "now": now,
-            "error": error,
-            "next_attempt_at": next_attempt_at,
-            "detail_fetched": 1 if detail_fetched else 0,
-            "ct_state": ct_state,
-        },
+        """UPDATE vehicles SET ingest_state = 'complete', ingest_attempts = 0, next_attempt_at = NULL,
+               last_error = NULL, ct_state = COALESCE(:ct_state, ct_state),
+               doc_attempts = CASE WHEN :docs_ok THEN 0 ELSE doc_attempts + 1 END
+           WHERE id = :id""",
+        {"id": vehicle_id, "ct_state": ct_state, "docs_ok": 1 if docs_ok else 0},
     )
+
+
+def mark_detail_fetched(conn: sqlite3.Connection, vehicle_id: int, now: str, *, late_ct_check: bool = False) -> None:
+    """Record a successful detail fetch without touching the ingest retry state."""
+    conn.execute(
+        """UPDATE vehicles SET detail_fetched_at = :now,
+               late_ct_checked_at = CASE WHEN :late THEN :now ELSE late_ct_checked_at END
+           WHERE id = :id""",
+        {"id": vehicle_id, "now": now, "late": 1 if late_ct_check else 0},
+    )
+
+
+def record_failure(
+    conn: sqlite3.Connection, vehicle_id: int, *, now_dt: datetime, error: str, set_failed: bool
+) -> int:
+    """Count one failed attempt and schedule the next one (2^n hours, max 24 h).
+
+    ``set_failed`` marks a not-yet-ingested car as failed; a complete car keeps its
+    state and only records the error. Returns the new attempt count.
+    """
+    row = conn.execute(
+        """UPDATE vehicles SET
+               ingest_state = CASE WHEN :set_failed THEN 'failed' ELSE ingest_state END,
+               ingest_attempts = ingest_attempts + 1,
+               last_error = :error
+           WHERE id = :id RETURNING ingest_attempts""",
+        {"id": vehicle_id, "error": error[:500], "set_failed": 1 if set_failed else 0},
+    ).fetchone()
+    attempts = int(row["ingest_attempts"]) if row else 1
+    nxt = utc_iso(now_dt + timedelta(hours=min(24, 2 ** attempts)))
+    conn.execute("UPDATE vehicles SET next_attempt_at = ? WHERE id = ?", (nxt, vehicle_id))
+    return attempts
 
 
 def upsert_document(conn: sqlite3.Connection, vehicle_id: int, doc: dict[str, Any], now: str) -> None:
@@ -707,9 +744,10 @@ def finish_run(
     counts: Optional[dict[str, Any]] = None,
     notes: Optional[dict[str, Any]] = None,
     error: Optional[str] = None,
-) -> None:
+) -> bool:
+    """Close the run. Returns False if another run had taken the lock over (fenced)."""
     counts = counts or {}
-    conn.execute(
+    cur = conn.execute(
         """UPDATE sync_runs SET status = :status, finished_at = :now, lots_seen = :lots_seen,
                expected_lots = :expected_lots, new_count = :new, relist_count = :relisted,
                detailed_count = :detailed, documents_count = :documents, failed_count = :failed,
@@ -730,6 +768,7 @@ def finish_run(
             "error": error,
         },
     )
+    return cur.rowcount == 1
 
 
 def get_stats(conn: sqlite3.Connection) -> dict[str, Any]:

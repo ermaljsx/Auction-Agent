@@ -10,11 +10,13 @@ PARIS = ZoneInfo("Europe/Paris")
 MAX_MILEAGE_KM = 1_500_000
 
 _SPACE = "[   ]"
-_GROUPED = rf"\d{{1,3}}(?:{_SPACE}\d{{3}})+"
+_SEP = "[   .]"  # French thousands separators: spaces, and sometimes '.'
+_GROUPED = rf"\d{{1,3}}(?:{_SEP}\d{{3}})+"
+_LEFT = r"(?<![\d.,])"  # never start in the middle of a number
 _KM_LINE_RE = re.compile(rf"^\s*({_GROUPED}|\d+)\s*km\s*$", re.IGNORECASE)
-_KM_ANY_RE = re.compile(rf"({_GROUPED}|\d+)\s*km\b", re.IGNORECASE)
-_EUR_RE = re.compile(rf"(\d{{1,3}}(?:(?:{_SPACE}|\.)\d{{3}})+|\d+)(?:,(\d{{1,2}}))?\s*€")
-_FIRST_INT_RE = re.compile(rf"({_GROUPED}|\d+)")
+_KM_ANY_RE = re.compile(rf"{_LEFT}({_GROUPED}|\d+)\s*km\b", re.IGNORECASE)
+_EUR_RE = re.compile(rf"{_LEFT}({_GROUPED}|\d+)(?:[.,](\d{{1,2}}))?\s*€")
+_FIRST_INT_RE = re.compile(rf"{_LEFT}({_GROUPED}|\d+)(?![.,]\d)")
 
 MONTHS_FR = {
     "janvier": 1, "fevrier": 2, "février": 2, "mars": 3, "avril": 4, "mai": 5, "juin": 6,

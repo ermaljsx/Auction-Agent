@@ -101,6 +101,7 @@ class Settings:
     min_request_interval: float = 2.0
     max_retry_after_s: float = 60.0
     respect_robots: bool = True
+    robots_token: str = "AuctionAgent"
 
     # Documents
     max_document_bytes: int = 15 * 1024 * 1024
@@ -111,6 +112,7 @@ class Settings:
     # Ingest behaviour
     relist_detail_check: bool = True
     late_ct_recheck_hours: int = 48
+    late_ct_budget: int = 50
     max_ingest_attempts: int = 5
 
     # Scoring
@@ -142,6 +144,8 @@ class Settings:
             request_timeout=_env_float("AUCTION_AGENT_REQUEST_TIMEOUT", 30.0),
             min_request_interval=_env_float("AUCTION_AGENT_MIN_INTERVAL", 2.0),
             respect_robots=_env_bool("AUCTION_AGENT_RESPECT_ROBOTS", True),
+            robots_token=os.environ.get("AUCTION_AGENT_ROBOTS_TOKEN", "AuctionAgent"),
+            late_ct_budget=_env_int("LATE_CT_BUDGET", 50),
             relist_detail_check=_env_bool("RELIST_DETAIL_CHECK", True),
             buyer_profile=os.environ.get("BUYER_PROFILE", "particulier"),
             engine_risk_max_tier=os.environ.get("ENGINE_RISK_MAX_TIER", "yellow"),

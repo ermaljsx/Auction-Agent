@@ -32,11 +32,15 @@ REPAIR_COST_MAJOR = {
 }
 CT_REDO_COST = 80.0
 
+_HS = r"(?:HS|H\.S\.?|HORS SERVICE)"
 _RED_SEVERE = re.compile(
-    r"\b(VGE|VEI|EPAVE|POUR PIECES|HORS D.?USAGE|SANS (?:CARTE GRISE|CG)|CG NON DISPONIBLE"
-    r"|MOTEUR HS|CASSE MOTEUR|MOTEUR CASSE|BOITE HS|BOITE DE VITESSE HS|NON ROULANT|NE DEMARRE PAS)\b"
+    r"(?<![A-Z])(VGE|VEI|EPAVE|POUR PIECES|HORS D.?USAGE|SANS (?:CARTE GRISE|CG)|CG NON DISPONIBLE"
+    rf"|MOTEUR {_HS}|CASSE MOTEUR|MOTEUR CASSE|BOITE(?: DE VITESSES?| AUTO(?:MATIQUE)?)? {_HS}"
+    rf"|BV[AM]? {_HS}|NON ROULANT|NE DEMARRE PAS)(?![A-Z])"
 )
-_YELLOW_TEXT = re.compile(r"\b(KILOMETRAGE NON (?:GARANTI|CERTIFIE)|KM NON GARANTIS?|COMPTEUR CHANGE)\b")
+_YELLOW_TEXT = re.compile(
+    r"(?<![A-Z])(KILOMETRAGE NON (?:GARANTI|CERTIFIE)S?|KM NON GARANTIS?|COMPTEUR CHANGE)(?![A-Z])"
+)
 _MINOR_TEXT = {
     "VOYANT": (3, "Voyant allumé signalé"),
     "BRUIT": (3, "Bruit signalé"),
@@ -45,6 +49,31 @@ _MINOR_TEXT = {
     "GRELE": (5, "Grêle signalée"),
     "RAYURE": (1, "Rayures signalées"),
 }
+_NEGATORS = {"NON", "PAS", "SANS", "AUCUN", "AUCUNE", "NI", "JAMAIS"}
+_PREFIX_TOKENS = {"CLASSE", "SERIE", "GRAND", "RANGE", "NEW", "MODEL", "NOUVELLE", "NOUVEAU", "ID.", "E"}
+
+
+def _negated(text: str, start: int) -> bool:
+    """True when one of the 3 words before ``start`` is a negation ('pas de fumée')."""
+    window = text[max(0, start - 30):start]
+    return any(tok in _NEGATORS for tok in re.findall(r"[A-Z]+", window)[-3:])
+
+
+def _first_affirmed(rx: re.Pattern[str], text: str) -> Optional[re.Match[str]]:
+    for m in rx.finditer(text):
+        if not _negated(text, m.start()):
+            return m
+    return None
+
+
+def add_months(day: date, months: int) -> date:
+    month = day.month - 1 + months
+    year, month = day.year + month // 12, month % 12 + 1
+    last = [31, 29 if year % 4 == 0 and (year % 100 != 0 or year % 400 == 0) else 28,
+            31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1]
+    return date(year, month, min(day.day, last))
+
+
 _LEASED_RE = re.compile(r"BATTERIE\s+(?:EN\s+)?LOCATION|LOCATION\s+DE\s+(?:LA\s+)?BATTERIE")
 
 
@@ -117,10 +146,15 @@ def _reason(pillar: str, code: str, delta: float, text: str, src: str, ref: str 
 
 
 def model_family(model: Optional[str]) -> Optional[str]:
+    """'CLIO IV' → 'CLIO'; 'CLASSE A 180' → 'CLASSE A'; 'C-ELYSEE' stays one token."""
     if not model:
         return None
-    token = re.split(r"[\s\-]+", model.strip().upper())[0]
-    return token or None
+    tokens = model.strip().upper().split()
+    if not tokens:
+        return None
+    if tokens[0] in _PREFIX_TOKENS and len(tokens) > 1:
+        return f"{tokens[0]} {tokens[1]}"
+    return tokens[0]
 
 
 def registration_date(facts: Facts) -> Optional[date]:
@@ -137,22 +171,39 @@ def registration_date(facts: Facts) -> Optional[date]:
 def match_engines(facts: Facts) -> list[dict[str, Any]]:
     text = fold(" ".join(filter(None, [facts.model, facts.trim])))
     out = []
+    brand = fold(facts.brand).strip() if facts.brand else None
     for entry in load_engine_kb()["engines"]:
         m = entry["match"]
-        if facts.brand and m.get("brands") and facts.brand.upper() not in m["brands"]:
-            continue
-        if not facts.brand:
+        if not brand or (m.get("brands") and brand not in m["brands"]):
             continue
         if facts.fuel and m.get("fuels") and facts.fuel not in m["fuels"]:
             continue
-        if facts.engine_cc and m.get("engine_cc") and facts.engine_cc not in m["engine_cc"]:
+        cc_known_match = bool(facts.engine_cc and m.get("engine_cc") and facts.engine_cc in m["engine_cc"])
+        if facts.engine_cc and m.get("engine_cc") and not cc_known_match:
             continue
-        if not re.search(m["text_regex"], text):
+        strong = re.search(m["text_regex"], text)
+        # Weak patterns (e.g. "BLUEHDI 100", shared by 1.5 and 1.6 engines) need the cc to confirm.
+        weak = m.get("weak_regex") and cc_known_match and re.search(m["weak_regex"], text)
+        if not (strong or weak):
             continue
         if facts.year and not (m["year_from"] <= facts.year <= m["year_to"]):
             continue
         out.append(entry)
     return out
+
+
+def _tighten_from_ct(p: Partial, ct: dict[str, Any]) -> None:
+    """Gates from defects that are certain whatever the overall reading of the PV."""
+    defects = ct.get("defects", [])
+    critical = next((d for d in defects if d["severity"] == "critical"), None)
+    if critical or ct.get("result") == RESULT_CRITICAL:
+        if not any(g.code == "ct_critique" for g in p.gates):
+            p.gates.append(Gate("ct_critique", "red", True, "CT défavorable pour défaillance critique", "ct",
+                                critical["code"] if critical else "result"))
+    safety = [d for d in defects if d["severity"] == "major" and d["system"] in CRITICAL_SYSTEMS]
+    if safety and not any(g.code == "ct_major_safety" for g in p.gates):
+        p.gates.append(Gate("ct_major_safety", "yellow", False,
+                            f"Défaillance majeure sur {safety[0]['system']} ({safety[0]['code']})", "ct", safety[0]["code"]))
 
 
 def assess(facts: Facts, settings: Settings, today: date, fee_model: Callable[..., float]) -> Partial:
@@ -208,7 +259,12 @@ def assess(facts: Facts, settings: Settings, today: date, fee_model: Callable[..
     needs_ct = age is None or age >= 4
     ct = facts.ct
     ct_redo = False
-    if facts.ct_doc in (None, "missing") or (ct is None and facts.ct_doc != "unreadable"):
+    absent = facts.ct_doc in (None, "missing") or (ct is None and facts.ct_doc != "unreadable")
+    unreadable = not absent and (
+        facts.ct_doc == "unreadable" or ct is None or ct.get("result") == "UNKNOWN"
+        or ct.get("parse_confidence", 0) < 0.8 or ct.get("nature") == "volontaire"
+    )
+    if absent or (unreadable and not needs_ct):
         if needs_ct:
             p.C = 55
             p.flags.append("ct_absent")
@@ -217,12 +273,16 @@ def assess(facts: Facts, settings: Settings, today: date, fee_model: Callable[..
         else:
             p.C = 85
             p.reasons.append(_reason("C", "ct_not_required", 15 * w_c, "Véhicule de moins de 4 ans : CT pas encore exigé", "listing", "first_registration"))
-    elif facts.ct_doc == "unreadable" or ct is None or ct.get("result") == "UNKNOWN" \
-            or ct.get("parse_confidence", 0) < 0.8 or ct.get("nature") == "volontaire":
+            if ct:  # a voluntary or uncertain CT on a young car can only tighten the result
+                _tighten_from_ct(p, ct)
+    elif unreadable:
         p.C = 55
         p.flags.append("ct_non_lu")
         p.issues.append("ct_unreadable")
+        p.reasons.append(_reason("C", "ct_non_lu", -15 * w_c, "Contrôle technique illisible ou incertain", "ct", "parse_confidence"))
         p.gates.append(Gate("ct_non_lu", "yellow", False, "Contrôle technique illisible ou incertain", "ct", "parse_confidence"))
+        if ct:
+            _tighten_from_ct(p, ct)
     else:
         counts = ct.get("counts", {})
         defects = ct.get("defects", [])
@@ -237,26 +297,21 @@ def assess(facts: Facts, settings: Settings, today: date, fee_model: Callable[..
             p.C = max(15.0, 60 - pen)
             p.reasons.append(_reason("C", "ct_major", (p.C - 70) * w_c,
                                      f"CT défavorable : {counts.get('major', 0)} défaillance(s) majeure(s)", "ct", "result"))
-            safety = [d for d in defects if d["severity"] == "major" and d["system"] in CRITICAL_SYSTEMS]
-            if safety:
-                p.gates.append(Gate("ct_major_safety", "yellow", False,
-                                    f"Défaillance majeure sur {safety[0]['system']} ({safety[0]['code']})", "ct", safety[0]["code"]))
         elif ct["result"] == RESULT_CRITICAL:
             p.C = 10
-            first = next((d for d in defects if d["severity"] == "critical"), None)
-            p.gates.append(Gate("ct_critique", "red", True, "CT défavorable pour défaillance critique", "ct",
-                                first["code"] if first else "result"))
+            p.reasons.append(_reason("C", "ct_critique", (10 - 70) * w_c,
+                                     f"CT défavorable : {counts.get('critical', 0)} défaillance(s) critique(s)", "ct", "result"))
+        _tighten_from_ct(p, ct)
         if ct.get("odometer_inconsistent"):
             p.gates.append(Gate("odometer", "yellow", False, "Historique kilométrique incohérent", "ct", "odometer"))
-        # CT freshness for a private buyer (6 months; 2 months after an unfavourable CT).
+        # CT freshness for a private buyer: 6 months (2 months after an unfavourable CT).
         insp = ct.get("inspection_date")
         if settings.buyer_profile == "particulier" and needs_ct and insp:
-            limit_days = 183 if ct["result"] == RESULT_FAVORABLE else 61
             try:
-                ct_age = (ref_date - date.fromisoformat(insp)).days
+                limit = add_months(date.fromisoformat(insp), 6 if ct["result"] == RESULT_FAVORABLE else 2)
             except ValueError:
-                ct_age = None
-            if ct_age is not None and ct_age > limit_days:
+                limit = None
+            if limit is not None and ref_date >= limit:
                 ct_redo = True
                 p.C -= 5
                 p.flags.append("ct_redo")
@@ -282,16 +337,19 @@ def assess(facts: Facts, settings: Settings, today: date, fee_model: Callable[..
         p.reasons.append(_reason("C", "warranty", 5 * w_c, f"Garantie : {facts.warranty}", "listing", "warranty"))
 
     if folded_comments:
-        severe = _RED_SEVERE.search(folded_comments)
+        severe = _first_affirmed(_RED_SEVERE, folded_comments)
         if severe:
             p.gates.append(Gate("comment_dealbreaker", "red", True,
                                 f"Mention « {severe.group(1).lower()} » dans les commentaires", "comment", severe.group(1)))
-        if _YELLOW_TEXT.search(folded_comments):
+        if _first_affirmed(_YELLOW_TEXT, folded_comments):
             p.gates.append(Gate("mileage_not_guaranteed", "yellow", False, "Kilométrage non garanti", "comment", "kilometrage"))
             p.issues.append("mileage_not_guaranteed")
         minor_total = 0
         for word, (pen, text) in _MINOR_TEXT.items():
-            if re.search(rf"\b{word}", folded_comments) and minor_total + pen <= 10:
+            hits = [m for m in re.finditer(rf"(?<![A-Z]){word}S?(?![A-Z])", folded_comments)
+                    if not _negated(folded_comments, m.start())
+                    and not folded_comments[max(0, m.start() - 5):m.start()] in ("PARE-", "PARE ")]
+            if hits and minor_total + pen <= 10:
                 minor_total += pen
                 p.C -= pen
                 p.reasons.append(_reason("C", f"comment_{word.lower()}", -pen * w_c, text, "comment", word.lower()))
@@ -388,11 +446,9 @@ def finalize(
     if confidence == "partial" and settings.green_min - 1 < cap:
         cap, max_tier = settings.green_min - 1, "yellow"
     final = int(round(max(0.0, min(pre, cap, 100.0))))
-    if binding is not None and pre > cap:
-        reasons.append(_reason("gate", binding.code, cap - pre, binding.text, binding.src, binding.ref))
-    for gate in part.gates:
-        if gate is not binding:
-            reasons.append(_reason("gate", gate.code, 0.0, gate.text, gate.src, gate.ref))
+    for gate in part.gates:  # every gate is explained, binding or not
+        delta = min(0.0, cap - pre) if gate is binding else 0.0
+        reasons.append(_reason("gate", gate.code, delta, gate.text, gate.src, gate.ref))
     tier = "green" if final >= settings.green_min else "yellow" if final >= settings.yellow_min else "red"
     if TIER_ORDER[tier] > TIER_ORDER[max_tier]:  # safety net; caps already enforce this
         tier = max_tier

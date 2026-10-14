@@ -12,18 +12,20 @@
 from __future__ import annotations
 
 import email.utils
+import re
 import random
 import time
 from dataclasses import dataclass, field
+from datetime import timezone
 from typing import Callable, Optional
-from urllib.parse import urlsplit
-from urllib.robotparser import RobotFileParser
+from urllib.parse import urljoin, urlsplit
 
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from .config import Settings
+from .robots import RobotsRules, parse_robots
 
 
 class FetchError(RuntimeError):
@@ -46,14 +48,22 @@ class DocumentTooLargeError(FetchError):
     pass
 
 
+# Interstitial pages: a challenge whatever the status code.
+_INTERSTITIAL_TITLES = (
+    "<title>just a moment...</title>",
+    "<title>attention required",
+    "<title>human verification",
+)
+# Script/markup hints that also appear on normal pages: only count with a refusal status.
 _CHALLENGE_MARKERS = (
     "aws-waf-token",
     "awswafintegration",
     "/challenge-platform/",
     "cf-chl-",
-    "<title>just a moment...</title>",
     "captcha-container",
 )
+_REDIRECTS = (301, 302, 303, 307, 308)
+MAX_REDIRECTS = 5
 
 
 @dataclass
@@ -66,13 +76,16 @@ class FetchResult:
 
     @property
     def text(self) -> str:
-        return self.content.decode(self.encoding or "utf-8", errors="replace")
+        try:
+            return self.content.decode(self.encoding or "utf-8", errors="replace")
+        except LookupError:  # unknown charset name in the header
+            return self.content.decode("utf-8", errors="replace")
 
 
 @dataclass
 class _HostState:
     last_request: float = 0.0
-    robots: Optional[RobotFileParser] = None
+    robots: Optional[RobotsRules] = None
     robots_checked: bool = False
 
 
@@ -131,14 +144,25 @@ class PoliteClient:
         max_bytes: Optional[int] = None,
         check_robots: bool = True,
     ) -> FetchResult:
-        """GET a URL. Returns 2xx and 404/410 results; raises for everything else."""
-        if check_robots and self.settings.respect_robots:
-            self._check_robots(url)
+        """GET a URL. Returns 2xx and 404/410 results; raises for everything else.
+
+        Redirects are followed by hand (at most 5) so that every hop is checked against
+        that host's robots.txt and throttled like any other request.
+        """
         attempts = 0
+        hops = 0
         while True:
+            if check_robots and self.settings.respect_robots:
+                self._check_robots(url)
             attempts += 1
             result = self._request(url, referer=referer, max_bytes=max_bytes)
-            if result.status in (429, 503):
+            if result.status in _REDIRECTS and result.headers.get("location"):
+                hops += 1
+                if hops > MAX_REDIRECTS:
+                    raise FetchError(f"{url}: too many redirects")
+                url = urljoin(url, result.headers["location"])
+                continue
+            if result.status in (429, 503) and not _looks_like_challenge(result):
                 wait = _retry_after_seconds(result.headers.get("retry-after"))
                 if attempts >= 2 or (wait is not None and wait > self.settings.max_retry_after_s):
                     raise RateLimitedError(f"{url}: HTTP {result.status}, Retry-After={wait}")
@@ -178,7 +202,8 @@ class PoliteClient:
         headers = {"Referer": referer} if referer else None
         try:
             with self.session.get(  # type: ignore[union-attr]
-                url, headers=headers, timeout=self.settings.request_timeout, stream=True
+                url, headers=headers, timeout=self.settings.request_timeout, stream=True,
+                allow_redirects=False,
             ) as resp:
                 chunks, total = [], 0
                 for chunk in resp.iter_content(chunk_size=65536):
@@ -188,12 +213,14 @@ class PoliteClient:
                     if max_bytes is not None and total > max_bytes:
                         raise DocumentTooLargeError(f"{url}: larger than {max_bytes} bytes")
                     chunks.append(chunk)
+                headers_l = {k.lower(): v for k, v in resp.headers.items()}
+                content = b"".join(chunks)
                 return FetchResult(
                     url=resp.url,
                     status=resp.status_code,
-                    headers={k.lower(): v for k, v in resp.headers.items()},
-                    content=b"".join(chunks),
-                    encoding=resp.encoding,
+                    headers=headers_l,
+                    content=content,
+                    encoding=_charset(headers_l.get("content-type", ""), content),
                 )
         except requests.RequestException as exc:
             raise FetchError(f"{url}: {exc.__class__.__name__}: {exc}") from exc
@@ -203,20 +230,23 @@ class PoliteClient:
     def _check_robots(self, url: str) -> None:
         key, state = self._host(url)
         if not state.robots_checked:
-            state.robots_checked = True
-            result = self._request(f"{key}/robots.txt", referer=None, max_bytes=512 * 1024)
+            # Only a definitive answer (2xx, 404/410) is cached; errors are re-raised and
+            # the next request tries again, so a failed fetch never means "allow all".
+            try:
+                result = self._request(f"{key}/robots.txt", referer=None, max_bytes=512 * 1024)
+            except DocumentTooLargeError as exc:
+                raise RobotsDisallowedError(f"{key}/robots.txt larger than 512 KiB") from exc
             if result.status in (403, 405) or _looks_like_challenge(result):
                 raise BlockedError(f"{key}/robots.txt: blocked or challenged (HTTP {result.status})")
             if result.status in (404, 410):
                 state.robots = None  # no robots.txt: everything allowed
             elif 200 <= result.status < 300:
-                parser = RobotFileParser()
-                parser.parse(result.text.splitlines())
-                state.robots = parser
+                state.robots = parse_robots(result.text)
             else:
                 # RFC 9309: an unreachable robots.txt means "assume complete disallow".
                 raise RobotsDisallowedError(f"{key}/robots.txt unreadable (HTTP {result.status})")
-        if state.robots is not None and not state.robots.can_fetch(self.settings.user_agent, url):
+            state.robots_checked = True
+        if state.robots is not None and not state.robots.can_fetch(self.settings.robots_token, url):
             raise RobotsDisallowedError(f"robots.txt disallows {url}")
 
 
@@ -224,20 +254,44 @@ def _retry_after_seconds(value: Optional[str]) -> Optional[float]:
     if not value:
         return None
     value = value.strip()
-    if value.isdigit():
+    if value.isascii() and value.isdigit():
         return float(value)
     try:
         parsed = email.utils.parsedate_to_datetime(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, IndexError):
         return None
+    if parsed.tzinfo is None:  # HTTP dates are always GMT
+        parsed = parsed.replace(tzinfo=timezone.utc)
     return max(0.0, parsed.timestamp() - time.time())
 
 
+_META_CHARSET_RE = re.compile(rb"<meta[^>]+charset=[\"']?([A-Za-z0-9_\-]+)", re.IGNORECASE)
+
+
+def _charset(content_type: str, content: bytes) -> Optional[str]:
+    """Explicit header charset, else <meta charset>, else UTF-8 for HTML.
+
+    requests would otherwise assume ISO-8859-1 for "text/html" without a charset and
+    turn "Numéro" into "NumÃ©ro", which breaks label matching and redaction.
+    """
+    m = re.search(r"charset=([\w\-]+)", content_type, re.IGNORECASE)
+    if m:
+        return m.group(1)
+    if "html" in content_type.lower() or content.lstrip()[:15].lower().startswith((b"<!doctype", b"<html")):
+        meta = _META_CHARSET_RE.search(content[:4096])
+        return meta.group(1).decode("ascii") if meta else "utf-8"
+    return None
+
+
 def _looks_like_challenge(result: FetchResult) -> bool:
-    if "x-amzn-waf-action" in result.headers:
+    headers = result.headers
+    if headers.get("x-amzn-waf-action") or headers.get("cf-mitigated", "").lower() == "challenge":
         return True
-    ctype = result.headers.get("content-type", "")
-    if "html" not in ctype or len(result.content) > 200_000:
+    if "html" not in headers.get("content-type", "").lower():
         return False
     body = result.content[:200_000].decode("utf-8", errors="ignore").lower()
-    return any(marker in body for marker in _CHALLENGE_MARKERS)
+    if any(title in body for title in _INTERSTITIAL_TITLES):
+        return True
+    if result.status in (202, 403, 405, 429, 503):
+        return any(marker in body for marker in _CHALLENGE_MARKERS)
+    return False

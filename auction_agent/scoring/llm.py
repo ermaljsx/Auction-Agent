@@ -118,29 +118,52 @@ def parse_reviews(raw: str, expected_keys: set[str]) -> dict[str, Review]:
 class GeminiClient:
     """google-genai client. Imported lazily so the rest of the app works without it."""
 
-    def __init__(self, api_key: str, model: str):
+    def __init__(self, api_key: str, model: str, timeout_s: float = 60.0):
         try:
             from google import genai  # noqa: PLC0415
             from google.genai import types  # noqa: PLC0415
         except ImportError as exc:  # pragma: no cover - depends on install
             raise LLMConfigError("google-genai is not installed: pip install -r requirements.txt") from exc
         self._genai, self._types = genai, types
-        self._client = genai.Client(api_key=api_key)
+        # The SDK default is no timeout and a single attempt: bound both.
+        self._client = genai.Client(
+            api_key=api_key,
+            http_options=types.HttpOptions(
+                timeout=int(timeout_s * 1000),
+                retry_options=types.HttpRetryOptions(attempts=3),
+            ),
+        )
         self.model = model
+        self._thinking_supported = True
 
-    def review(self, payloads: list[dict[str, Any]]) -> ReviewBatch:
-        from google.genai import errors  # noqa: PLC0415
-
-        config = self._types.GenerateContentConfig(
+    def _config(self):
+        kwargs: dict[str, Any] = dict(
             system_instruction=SYSTEM_PROMPT,
             response_mime_type="application/json",
             response_json_schema=RESPONSE_SCHEMA,
             temperature=0,
         )
+        if self._thinking_supported:
+            kwargs["thinking_config"] = self._types.ThinkingConfig(thinking_budget=0)
+        return self._types.GenerateContentConfig(**kwargs)
+
+    def review(self, payloads: list[dict[str, Any]]) -> ReviewBatch:
+        from google.genai import errors  # noqa: PLC0415
+
+        contents = build_prompt(payloads)
         try:
-            response = self._client.models.generate_content(
-                model=self.model, contents=build_prompt(payloads), config=config
-            )
+            try:
+                response = self._client.models.generate_content(
+                    model=self.model, contents=contents, config=self._config()
+                )
+            except errors.ClientError as exc:
+                if getattr(exc, "code", None) == 400 and "thinking" in str(exc).lower() and self._thinking_supported:
+                    self._thinking_supported = False  # model requires thinking: retry with its default
+                    response = self._client.models.generate_content(
+                        model=self.model, contents=contents, config=self._config()
+                    )
+                else:
+                    raise
         except errors.ClientError as exc:
             code = getattr(exc, "code", None)
             if code in (400, 401, 403, 404):
@@ -151,10 +174,17 @@ class GeminiClient:
             raise LLMTransientError(str(exc)) from exc
         except errors.APIError as exc:
             raise LLMTransientError(str(exc)) from exc
+        except Exception as exc:  # network errors (httpx) are not wrapped by the SDK
+            raise LLMTransientError(f"{exc.__class__.__name__}: {exc}") from exc
         usage = getattr(response, "usage_metadata", None)
-        reviews = parse_reviews(response.text or "", {p["key"] for p in payloads})
+        reviews = parse_reviews(getattr(response, "text", None) or "", {p["key"] for p in payloads})
+        out_tokens = None
+        if usage is not None:
+            out_tokens = (getattr(usage, "candidates_token_count", 0) or 0) + (
+                getattr(usage, "thoughts_token_count", 0) or 0
+            )
         return ReviewBatch(
             reviews=reviews,
             tokens_in=getattr(usage, "prompt_token_count", None),
-            tokens_out=getattr(usage, "candidates_token_count", None),
+            tokens_out=out_tokens,
         )

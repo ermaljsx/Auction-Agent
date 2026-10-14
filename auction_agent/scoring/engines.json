@@ -1,22 +1,39 @@
 {
   "version": "kb-2026.10",
-  "notes": "Seed entries only (Phase 1). Each entry lists its sources and confidence; manufacturer cover programmes are recorded but give no score credit until maintenance evidence is parsed (Phase 3).",
+  "notes": "Seed entries only (Phase 1). Each entry lists its sources and confidence; manufacturer cover programmes are recorded but give no score credit until maintenance evidence is parsed (Phase 3). 'weak_regex' only counts when the engine displacement (cc) is known and listed.",
   "engines": [
     {
       "id": "stellantis_puretech_eb2_turbo",
       "label_fr": "1.2 PureTech turbo : courroie de distribution « humide » qui se délite, consommation d'huile",
       "match": {
-        "brands": ["PEUGEOT", "CITROEN", "DS", "OPEL", "FIAT"],
-        "fuels": ["petrol", "hybrid", "plugin_hybrid"],
-        "text_regex": "PURE\\s*TECH\\s*(?:S&S\\s*)?(?:100|110|130|155)\\b",
-        "engine_cc": [1199],
+        "brands": [
+          "PEUGEOT",
+          "CITROEN",
+          "DS",
+          "OPEL",
+          "FIAT"
+        ],
+        "fuels": [
+          "petrol",
+          "hybrid",
+          "plugin_hybrid"
+        ],
+        "text_regex": "PURE\\s*TECH\\s*(?:S&S\\s*)?(?:100|110|130|155)\\b|(?<![\\d.])1[.,]2\\s*(?:L\\s*)?TURBO\\s*(?:100|110|130|155)?\\b",
+        "engine_cc": [
+          1199
+        ],
         "year_from": 2013,
         "year_to": 2022
       },
       "penalty": 25,
       "catastrophic": true,
       "confidence": "high",
-      "programme": {"years": 10, "km": 180000, "requires_service_proof": true, "as_of": "2026-10"},
+      "programme": {
+        "years": 10,
+        "km": 180000,
+        "requires_service_proof": true,
+        "as_of": "2026-10"
+      },
       "sources": [
         "https://www.peugeot.fr/entretien-et-services/moteurs-puretech-solutions.html",
         "https://www.opel.fr/entretien-services/garantie-assistance/extended-warranty-for-puretech.html"
@@ -26,17 +43,34 @@
       "id": "stellantis_bluehdi_15_dv5",
       "label_fr": "1.5 BlueHDi (DV5) : chaîne reliant les arbres à cames qui s'allonge et peut casser (moteurs ~2017–2023)",
       "match": {
-        "brands": ["PEUGEOT", "CITROEN", "DS", "OPEL", "FIAT", "TOYOTA"],
-        "fuels": ["diesel"],
-        "text_regex": "1[.,]5\\s*(?:L\\s*)?BLUE\\s*HDI|BLUE\\s*HDI\\s*130",
-        "engine_cc": [1499],
+        "brands": [
+          "PEUGEOT",
+          "CITROEN",
+          "DS",
+          "OPEL",
+          "FIAT",
+          "TOYOTA"
+        ],
+        "fuels": [
+          "diesel"
+        ],
+        "text_regex": "1[.,]5\\s*(?:L\\s*)?BLUE\\s*HDI|BLUE\\s*HDI\\s*130\\b",
+        "engine_cc": [
+          1499
+        ],
         "year_from": 2017,
-        "year_to": 2023
+        "year_to": 2023,
+        "weak_regex": "BLUE\\s*HDI\\s*(?:100|102|110|120)\\b"
       },
       "penalty": 20,
       "catastrophic": true,
       "confidence": "high",
-      "programme": {"years": 10, "km": 240000, "requires_service_proof": true, "as_of": "2026-10"},
+      "programme": {
+        "years": 10,
+        "km": 240000,
+        "requires_service_proof": true,
+        "as_of": "2026-10"
+      },
       "sources": [
         "https://fr.motor1.com/news/764852/moteur-bluehdi-stellantis-rappel/",
         "https://www.largus.fr/actualite-automobile/casse-chaine-1-5-bluehdi-stellantis-etend-sa-prise-en-charge-a-7-ans-ou-180-000-km-30038271.html"
@@ -46,12 +80,22 @@
       "id": "renault_tce_12_h5ft",
       "label_fr": "1.2 TCe (H5Ft) : surconsommation d'huile sur les moteurs produits d'octobre 2012 à juillet 2016",
       "match": {
-        "brands": ["RENAULT", "DACIA", "NISSAN"],
-        "fuels": ["petrol"],
-        "text_regex": "1[.,]2\\s*TCE|TCE\\s*(?:115|120|125|130)\\b|DIG-?T\\s*115",
-        "engine_cc": [1197, 1198],
+        "brands": [
+          "RENAULT",
+          "DACIA",
+          "NISSAN"
+        ],
+        "fuels": [
+          "petrol"
+        ],
+        "text_regex": "TCE\\s*(?:115|120|125|130)\\b|DIG-?T\\s*115",
+        "engine_cc": [
+          1197,
+          1198
+        ],
         "year_from": 2012,
-        "year_to": 2016
+        "year_to": 2016,
+        "weak_regex": "1[.,]2\\s*TCE"
       },
       "penalty": 20,
       "catastrophic": true,

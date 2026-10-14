@@ -10,7 +10,7 @@ import hashlib
 import io
 import time
 import unicodedata
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
 
@@ -90,11 +90,16 @@ def process_document_bytes(
     if not text:
         doc.parse_status = "empty_text"  # scanned/image-only: "CT non lu" downstream
         return doc
-    doc.text = redact(text)
+    # Parse the original text in memory (redaction could hide mileage or dates), then
+    # store only redacted text and redacted defect labels.
     if doc_type == "ct":
-        doc.parsed = parse_controle_technique(doc.text)
+        parsed = parse_controle_technique(text)
+        for defect in parsed["defects"]:
+            defect["label"] = redact(defect["label"]) or ""
+        doc.parsed = parsed
         doc.parser_version = PARSER_VERSION
-        doc.parse_confidence = doc.parsed["parse_confidence"]
+        doc.parse_confidence = parsed["parse_confidence"]
+    doc.text = redact(text)
     doc.parse_status = "parsed"
     return doc
 
@@ -116,14 +121,16 @@ def fetch_document(
 
 def quarantine(data: bytes, sha256: str, settings: Settings) -> Optional[Path]:
     """Keep an unparseable PDF briefly for debugging, within a hard file cap."""
-    qdir = settings.quarantine_dir
-    qdir.mkdir(parents=True, exist_ok=True)
-    existing = sorted(qdir.glob("*.pdf"), key=lambda p: p.stat().st_mtime)
-    if len(existing) >= settings.quarantine_max_files:
-        return None
-    path = qdir / f"{sha256}.pdf"
-    path.write_bytes(data)
-    return path
+    try:
+        qdir = settings.quarantine_dir
+        qdir.mkdir(parents=True, exist_ok=True)
+        if len(list(qdir.glob("*.pdf"))) >= settings.quarantine_max_files:
+            return None
+        path = qdir / f"{sha256}.pdf"
+        path.write_bytes(data)
+        return path
+    except OSError:
+        return None  # debugging aid only: never let it break a crawl
 
 
 def sweep_quarantine(settings: Settings, now: Optional[float] = None) -> int:
@@ -133,7 +140,10 @@ def sweep_quarantine(settings: Settings, now: Optional[float] = None) -> int:
     cutoff = (now if now is not None else time.time()) - settings.quarantine_ttl_days * 86400
     removed = 0
     for path in qdir.glob("*.pdf"):
-        if path.stat().st_mtime < cutoff:
-            path.unlink(missing_ok=True)
-            removed += 1
+        try:
+            if path.stat().st_mtime < cutoff:
+                path.unlink(missing_ok=True)
+                removed += 1
+        except OSError:
+            continue
     return removed

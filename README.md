@@ -13,7 +13,7 @@ The roadmap, architecture decisions, sources and known risks are in **[docs/MAST
 | Crawl | Walks one Alcopa sale, page by page, and **reports whether the walk was complete**. Each lot is identified by the product id in its URL, not by its lot number. |
 | Ingest | New cars get their detail page and CT PDF. The PDF is downloaded **into memory**, parsed, and VIN/plate-redacted, and is **never written to disk**. Known cars only get a cheap listing refresh. A relisted car gets one detail-page check, and its CT is downloaded again only if the CT link changed. |
 | Score | Deterministic rubric with gates, run on every car. The LLM (Gemini) is optional, only called on triggers, and its output is cached. |
-| Report | Self-contained HTML report: top picks, then cars grouped by tier, with the facts behind every score. |
+| Report | Self-contained HTML report: top picks (only cars whose sale is in the next 7 days), then cars grouped by tier, with the facts behind every score and every cap. |
 
 | Tier | Score | Meaning |
 |---|:---:|---|
@@ -49,12 +49,15 @@ python run_crawl.py --url /salle-de-vente-encheres/beauvais/13026
 # Score every vehicle and open the report (heuristics only, no API key needed)
 python run_advisor.py --open
 python run_advisor.py --max-price 12000 --open   # all-in budget, euros
+python run_advisor.py --sale-id 3 --open         # one sale: id from `python -m auction_agent stats`
 ```
+
+`--sale-id` takes the database id printed by `crawl` and `stats`; the auction house's own sale number (e.g. `13026`) is accepted too. `--no-llm` scores with heuristics only and also ignores LLM output cached by earlier runs.
 
 The same commands are available as `python -m auction_agent crawl | score | report | advise | stats | capture | cleanup-legacy`. Add `--help` to any command for its flags.
 
 ### Upgrading from the prototype
-On first run, the old `data/auction.db` is moved to `data/auction.v1-<date>.db` with VIN and plate columns emptied, and a new database is created. To delete the old database and the prototype's `data/documents/lot_*` PDFs:
+On first run, the old `data/auction.db` is moved to `data/auction.v1-<date>.db` with VIN, plate, comments, raw CT text and photo URLs emptied, and a new database is created. To delete the old database (including the backup made by the same command) and the prototype's `data/documents/lot_*` / `veh_*` PDFs:
 
 ```bash
 python -m auction_agent cleanup-legacy            # dry run: shows what would be deleted
@@ -82,11 +85,15 @@ The old default `gemini-2.5-flash` was reportedly being retired around 16–20 O
 | `AUCTION_AGENT_REPORTS_DIR` | `reports/` | HTML reports |
 | `AUCTION_AGENT_MIN_INTERVAL` | `2.0` | Seconds between two requests to the same site (plus jitter) |
 | `AUCTION_AGENT_USER_AGENT` | browser string | Consider an honest bot name with a contact address (see the legal note) |
+| `AUCTION_AGENT_ROBOTS_TOKEN` | `AuctionAgent` | Product token matched against `User-agent:` groups in robots.txt (RFC 9309 matching: longest rule wins, `*` and `$` supported) |
+| `AUCTION_AGENT_RESPECT_ROBOTS` | `1` | Keep at 1; an unreadable robots.txt stops the crawl |
+| `AUCTION_AGENT_REQUEST_TIMEOUT` | `30` | Seconds per HTTP request |
 | `BUYER_PROFILE` | `particulier` | `pro` drops the private-buyer rules (CT under 6 months, VAT) |
 | `ENGINE_RISK_MAX_TIER` | `yellow` | `red` sends known risky engines to 🔴 |
 | `TIER_GREEN_MIN` / `TIER_YELLOW_MIN` | `80` / `60` | Tier thresholds |
 | `RELIST_DETAIL_CHECK` | `1` | One detail-page check when a car is relisted |
-| `IDENTITY_HMAC_KEY` | auto | Key for VIN hashing; otherwise generated once in `data/identity.key` |
+| `LATE_CT_BUDGET` | `50` | Maximum detail pages re-checked per crawl for cars whose CT appeared late |
+| `IDENTITY_HMAC_KEY` | auto | Key for VIN hashing (hex, at least 32 bytes); otherwise generated once in `data/identity.key`. Never change it on an existing database |
 | `GEMINI_API_KEY`, `GEMINI_MODEL`, `GEMINI_PAID_TIER`, `LLM_LIMIT` | unset, unset, 0, 60 | Optional LLM review |
 
 ## Architecture
@@ -95,7 +102,8 @@ The old default `gemini-2.5-flash` was reportedly being retired around 16–20 O
 auction_agent/
 ├── config.py          # Settings from env, one UTC timestamp format
 ├── db.py              # SQLite schema v2 (WAL, incremental vacuum), upserts, run lock
-├── http_client.py     # PoliteClient: retries, Retry-After cap, WAF detection, robots.txt
+├── http_client.py     # PoliteClient: retries, Retry-After cap, WAF detection, per-hop robots checks
+├── robots.py          # RFC 9309 robots.txt matcher (same result on every Python version)
 ├── documents.py       # in-memory PDF → text → redaction (no files on disk)
 ├── ct_parser.py       # CT procès-verbal parser v2 (results, defects, odometer)
 ├── privacy.py         # VIN/plate redaction, keyed HMAC identity

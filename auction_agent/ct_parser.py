@@ -42,15 +42,21 @@ SYSTEMS = {
 }
 CRITICAL_SYSTEMS = {"freinage", "direction", "structure"}
 
-_HEADER_RE = re.compile(r"^\s*DEFAILLANCES?\s+(MINEURES?|MAJEURES?|CRITIQUES?)\b(.*)$")
+_HEADER_RE = re.compile(r"^\s*DEFAILLANCES?(?:\(S\))?\s+(MINEURE|MAJEURE|CRITIQUE)(?:S|\(S\))?(?![A-Z])(.*)$")
+# What may follow a real section header: nothing, a count, or "néant".
+_HEADER_REST_OK = re.compile(r"^\s*[:\-]?\s*(?:\(?\d+\)?|NEANT|AUCUNE?|SANS OBJET)?\s*[:\-.]?\s*$")
 _NONE_RE = re.compile(r"\b(NEANT|AUCUNE?|SANS OBJET)\b")
+# Defect codes have at least three levels (e.g. 5.2.3, 1.1.13.a.2); "1.6 mm" is not one.
 _CODE_RE = re.compile(
-    r"^\s*(?P<code>(?P<fn>\d)\.\d{1,2}(?:\.\d{1,2}){0,2}(?:\.[A-Z])?(?:\.(?P<suffix>[123]))?)"
+    r"^\s*(?P<code>(?P<fn>\d)\.\d{1,2}\.\d{1,2}(?:\.\d{1,2})?(?:\.[A-Z])?(?:\.(?P<suffix>[123]))?)"
     r"(?![\d.])\s*[-:.)]?\s*(?P<label>.*)$"
 )
+# Running headers/footers between pages: they neither end a section nor join a label.
+_PAGE_FURNITURE_RE = re.compile(r"^\s*(?:PAGE\s+\d+(?:\s*/\s*\d+)?|PROCES[- ]VERBAL\b.*|-?\s*\d+\s*/\s*\d+\s*-?)\s*$")
 _FOOTER_RE = re.compile(
     r"^\s*(PROCHAIN|DATE|CENTRE|SIGNATURE|VALIDITE|KILOMETRAGE|RESULTAT|NATURE|OBSERVATIONS?"
-    r"|COMMENTAIRES?|LES DEFAILLANCES|CONTROLEUR|AGREMENT|PROCES[- ]VERBAL|PAGE\s+\d)\b"
+    r"|COMMENTAIRES?|LES DEFAILLANCES|CONTROLEUR|AGREMENT|CONTRE[- ]VISITE|IMMATRICULATION"
+    r"|N.\s*D.?IDENTIFICATION|MARQUE|MODELE|LEGENDE)\b"
 )
 _RESULT_FIELD_RE = re.compile(r"RESULTAT(?:\s+DU\s+CONTROLE)?\s*[:\-]?\s*(?P<value>[^\n]{0,120})")
 _PHRASES = {
@@ -66,6 +72,8 @@ _KM_LABEL_RE = re.compile(
     r"(\d{1,3}(?:[ .]\d{3})+|\d{1,7})\s*KM\b"
 )
 _ODO_PAIR_RE = re.compile(r"(\d{2})/(\d{2})/(\d{4})[^\n\d]{0,25}?(\d{1,3}(?:[ .]\d{3})+|\d{4,7})\s*KM\b")
+# A date with one of these labels is not an odometer reading date.
+_NOT_ODO_DATE_RE = re.compile(r"(IMMATRICULATION|MISE EN CIRCULATION|PROCHAIN|VALIDITE|AVANT LE|JUSQU)[^\n]{0,15}$")
 
 
 def fold(text: str) -> str:
@@ -162,45 +170,66 @@ def parse_controle_technique(text: Optional[str]) -> dict[str, Any]:
         summary["inspection_km"] = _to_int(m.group(1))
 
     # --- defects, by section. Without any section header, fall back to the code suffix.
-    has_headers = any(_HEADER_RE.match(line) for line in folded_lines)
+    def real_header(line: str):
+        m = _HEADER_RE.match(line)
+        if not m:
+            return None, None
+        rest = m.group(2)
+        if _HEADER_REST_OK.match(rest):
+            return m, None
+        inline = _CODE_RE.match(rest.lstrip(" :-"))
+        if inline:
+            return m, inline  # "DÉFAILLANCES MAJEURES 1.1.13.a.2 ..." on one line
+        return None, None  # a legend sentence such as "Défaillances majeures : contre-visite ..."
+
+    has_headers = any(real_header(line)[0] for line in folded_lines)
     current: Optional[str] = None
     last_defect: Optional[dict[str, Any]] = None
+    skipped_codes = 0
+
+    def add_defect(code: re.Match, label: str) -> Optional[dict[str, Any]]:
+        suffix_sev = _suffix_severity(code.group("suffix"))
+        severity = current if has_headers else suffix_sev
+        if severity is None:
+            return None
+        if current and suffix_sev and suffix_sev != current:
+            summary["suffix_disagreements"] += 1
+        defect = {
+            "code": code.group("code").lower(),
+            "severity": severity,
+            "system": SYSTEMS.get(code.group("fn"), "autre"),
+            "label": label.strip(" -:.)\t")[:200],
+        }
+        summary["defects"].append(defect)
+        summary["counts"][severity] += 1
+        return defect
+
+    def original_label(orig: str, code_text: str) -> str:
+        idx = fold(orig).find(code_text)
+        return orig[idx + len(code_text):] if idx >= 0 else orig
+
     for orig, line in zip(original_lines, folded_lines):
-        header = _HEADER_RE.match(line)
+        header, inline = real_header(line)
         if header:
             current = _severity_from_header(header.group(1))
             last_defect = None
-            rest = header.group(2)
-            if _NONE_RE.search(rest):
+            if _NONE_RE.search(header.group(2)) and not inline:
                 current = None
+            if inline:
+                last_defect = add_defect(inline, original_label(orig, inline.group("code")))
             continue
         if not line.strip():
             continue
+        if _PAGE_FURNITURE_RE.match(line):
+            last_defect = None
+            continue
         code = _CODE_RE.match(line)
         if code:
-            suffix_sev = _suffix_severity(code.group("suffix"))
-            severity = current if has_headers else suffix_sev
-            if severity is None:
-                last_defect = None
-                continue
-            if current and suffix_sev and suffix_sev != current:
-                summary["suffix_disagreements"] += 1
-            orig_code = _CODE_RE.match(fold(orig))
-            label = orig.strip()
-            if orig_code:
-                start = len(orig) - len(orig.lstrip())
-                label = orig[start + len(orig_code.group("code")):].strip(" -:.)\t")
-            defect = {
-                "code": code.group("code").lower(),
-                "severity": severity,
-                "system": SYSTEMS.get(code.group("fn"), "autre"),
-                "label": label[:200],
-            }
-            summary["defects"].append(defect)
-            summary["counts"][severity] += 1
-            last_defect = defect
+            last_defect = add_defect(code, original_label(orig, code.group("code")))
+            if last_defect is None and has_headers:
+                skipped_codes += 1
             continue
-        if _FOOTER_RE.match(line):
+        if _HEADER_RE.match(line) or _FOOTER_RE.match(line):
             current = None
             last_defect = None
             continue
@@ -239,12 +268,21 @@ def parse_controle_technique(text: Optional[str]) -> dict[str, Any]:
     confidence -= 0.1 * summary["suffix_disagreements"]
     if summary["defects"] and not has_headers:
         confidence = min(confidence, 0.7)
+    if skipped_codes:
+        confidence = min(confidence, 0.6)  # defect codes outside any recognised section
+    if (summary["result"] == RESULT_MAJOR and not counts["major"]) or (
+        summary["result"] == RESULT_CRITICAL and not counts["critical"]
+    ):
+        confidence = min(confidence, 0.6)  # the stated result is not backed by defects
     if summary["nature"] == "volontaire":
         confidence = min(confidence, 0.6)
 
     # --- odometer history
     pairs = []
-    for d, mth, y, km in _ODO_PAIR_RE.findall(folded):
+    for m in _ODO_PAIR_RE.finditer(folded):
+        if _NOT_ODO_DATE_RE.search(folded[max(0, m.start() - 40):m.start()]):
+            continue
+        d, mth, y, km = m.groups()
         iso = _date(d, mth, y)
         if iso:
             pairs.append((iso, _to_int(km)))

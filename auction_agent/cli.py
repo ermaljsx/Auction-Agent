@@ -6,12 +6,14 @@ Commands: crawl, score, report, advise (score + report), stats, capture, cleanup
 from __future__ import annotations
 
 import argparse
+import hashlib
+import re
 import shutil
 import sys
 import webbrowser
 from pathlib import Path
 from typing import Optional, Sequence
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit
 
 from rich.console import Console
 
@@ -20,6 +22,7 @@ from .adapters import get_adapter_class
 from .adapters.alcopa import BASE_URL as ALCOPA_BASE_URL
 from .config import DEFAULT_SALE_URL, PROJECT_DIR, Settings
 from .http_client import FetchError, PoliteClient
+from .documents import sweep_quarantine
 from .ingest import CrawlOptions, run_crawl
 from .privacy import redact
 
@@ -52,6 +55,8 @@ def cmd_crawl(args: argparse.Namespace, settings: Settings) -> int:
         )
     style = {"ok": "green", "incomplete": "yellow"}.get(report.status, "red")
     console.rule(f"[bold {style}]Crawl {report.status}[/bold {style}]")
+    if report.sale_id is not None:
+        console.print(f"  {'sale id':>14}: {report.sale_id}  (use with run_advisor.py --sale-id)")
     for key, value in report.counts.items():
         console.print(f"  {key:>14}: {value}")
     for reason in report.reasons:
@@ -100,8 +105,16 @@ def cmd_advise(args: argparse.Namespace, settings: Settings) -> int:
 def cmd_stats(args: argparse.Namespace, settings: Settings) -> int:
     with db.open_db(settings.db_path) as conn:
         stats = db.get_stats(conn)
+        sales = conn.execute(
+            "SELECT id, house, external_id, room, starts_at, status FROM sales ORDER BY starts_at DESC, id DESC LIMIT 20"
+        ).fetchall()
     for key, value in stats.items():
         console.print(f"  {key:>18}: {value}", highlight=False)
+    if sales:
+        console.print("  sales (id = value for --sale-id):")
+        for s in sales:
+            console.print(f"    {s['id']:>4}  {s['house']} {s['external_id']}  {s['room'] or ''}  "
+                          f"{(s['starts_at'] or '')[:10]}  {s['status']}", highlight=False)
     return 0
 
 
@@ -124,28 +137,38 @@ def cmd_capture(args: argparse.Namespace, settings: Settings) -> int:
             except FetchError as exc:
                 console.print(f"[red]{url}: {exc}[/red]", highlight=False)
                 return 2
-            name = f"{kind}-{url.rstrip('/').split('/')[-1].split('?')[0]}.html"
-            (out_dir / name).write_text(redact(html) or "", encoding="utf-8")
+            tail = urlsplit(url).path.rstrip("/").rsplit("/", 1)[-1] or "page"
+            safe = re.sub(r"[^A-Za-z0-9._-]", "_", tail)[:80]
+            digest = hashlib.sha256(url.encode("utf-8")).hexdigest()[:8]
+            target = (out_dir / f"{kind}-{safe}-{digest}.html").resolve()
+            if target.parent != out_dir.resolve():
+                console.print(f"[red]Refusing to write outside {out_dir}[/red]", highlight=False)
+                return 2
+            target.write_text(redact(html) or "", encoding="utf-8")
+            name = target.name
             console.print(f"Saved {out_dir / name}", highlight=False)
     console.print("[yellow]Review these files by hand before committing them (they are git-ignored).[/yellow]")
     return 0
 
 
 def cmd_cleanup_legacy(args: argparse.Namespace, settings: Settings) -> int:
-    """Retire the v1 database and delete the prototype's on-disk PDF cache."""
+    """Retire the v1 database, delete the prototype's PDF cache and expired quarantine."""
     actions: list[tuple[str, Path]] = []
     if db.is_legacy_v1(settings.db_path):
-        actions.append(("retire v1 database (VIN/plate removed, file moved aside)", settings.db_path))
-    docs_dir = settings.data_dir / "documents"
-    if docs_dir.exists():
-        for child in sorted(docs_dir.iterdir()):
-            if child.is_dir() and (child.name.startswith("lot_") or child.name.startswith("veh_")):
-                actions.append(("delete prototype PDF folder", child))
+        actions.append(("retire v1 database (identifying data removed, file moved aside)", settings.db_path))
+    # The prototype always wrote PDFs under PROJECT_DIR/data/documents; also check data_dir.
+    for docs_dir in sorted({PROJECT_DIR / "data" / "documents", settings.data_dir / "documents"}):
+        if docs_dir.exists():
+            for child in sorted(docs_dir.iterdir()):
+                if child.is_dir() and (child.name.startswith("lot_") or child.name.startswith("veh_")):
+                    actions.append(("delete prototype PDF folder", child))
     if args.delete_backups:
-        for backup in sorted(settings.data_dir.glob("auction.v1-*.db")):
-            actions.append(("delete retired v1 database", backup))
+        for folder in sorted({settings.db_path.parent, settings.data_dir}):
+            for backup in sorted(folder.glob("auction.v1-*.db")):
+                actions.append(("delete retired v1 database", backup))
     if not actions:
-        console.print("Nothing to clean up.")
+        removed = sweep_quarantine(settings) if args.yes else 0
+        console.print(f"Nothing to clean up{f' (removed {removed} expired quarantined PDF(s))' if removed else ''}.")
         return 0
     for what, path in actions:
         console.print(f"  {what}: {path}", highlight=False)
@@ -154,12 +177,15 @@ def cmd_cleanup_legacy(args: argparse.Namespace, settings: Settings) -> int:
         return 0
     for what, path in actions:
         if what.startswith("retire"):
-            db.retire_legacy_database(path)
+            backup = db.retire_legacy_database(path)
+            if backup is not None and args.delete_backups:
+                backup.unlink(missing_ok=True)  # the backup created just now goes too
         elif path.is_dir():
             shutil.rmtree(path)
         else:
             path.unlink(missing_ok=True)
-    console.print("[green]Done.[/green]")
+    removed = sweep_quarantine(settings)
+    console.print(f"[green]Done.[/green]{f' Removed {removed} expired quarantined PDF(s).' if removed else ''}")
     return 0
 
 
@@ -180,7 +206,8 @@ def build_parser() -> argparse.ArgumentParser:
     crawl.set_defaults(func=cmd_crawl)
 
     def add_score_args(p: argparse.ArgumentParser) -> None:
-        p.add_argument("--no-llm", action="store_true", help="Heuristic scoring only")
+        p.add_argument("--no-llm", action="store_true",
+                       help="Heuristic scoring only (no LLM calls, cached LLM output ignored)")
         p.add_argument("--llm-limit", type=int, default=None, help="Maximum LLM calls this run")
 
     def add_report_args(p: argparse.ArgumentParser) -> None:

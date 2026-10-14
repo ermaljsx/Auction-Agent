@@ -11,7 +11,7 @@ from jinja2 import Environment, PackageLoader
 
 from .adapters._parsing import PARIS
 from .config import Settings, parse_utc_iso, utc_iso, utc_now
-from .scoring.service import best_listings
+from .scoring.service import best_listings, upcoming_vehicle_ids
 
 TIER_LABELS = {
     "green": "Profil favorable selon nos critères",
@@ -107,6 +107,15 @@ def generate_report(
 ) -> Path:
     now_dt = now or utc_now()
     listings = best_listings(conn, utc_iso(now_dt))
+    upcoming = upcoming_vehicle_ids(conn, now_dt, settings)
+    notes: list[str] = []
+    if sale_id is not None and conn.execute("SELECT 1 FROM sales WHERE id = ?", (sale_id,)).fetchone() is None:
+        # Users often pass the auction house's sale number: accept it too.
+        row = conn.execute("SELECT id FROM sales WHERE external_id = ?", (str(sale_id),)).fetchone()
+        if row is not None:
+            sale_id = int(row["id"])
+        else:
+            notes.append(f"Aucune vente avec l'identifiant {sale_id} : utilisez `python -m auction_agent stats`.")
     query = """SELECT a.*, v.brand, v.model, v.trim, v.year, v.mileage_km, v.fuel, v.gearbox
                FROM assessments a JOIN vehicles v ON v.id = a.vehicle_id
                WHERE v.lifecycle = 'active'"""
@@ -123,7 +132,10 @@ def generate_report(
     cards = [_card(row, listings.get(row["vehicle_id"]), ct_docs.get(row["vehicle_id"]))
              for row in conn.execute(query, params)]
 
-    top = [c for c in cards if c["tier"] != "red" and c["confidence"] == "full"][: settings.top_n]
+    # Top picks: only cars whose sale is still to come within the week.
+    top = [c for c in cards if c["tier"] != "red" and c["confidence"] == "full" and c["id"] in upcoming][: settings.top_n]
+    if not cards:
+        notes.append("Aucun véhicule ne correspond aux filtres.")
     top_ids = {c["id"] for c in top}
     sections = [
         (tier, TIER_LABELS[tier], [c for c in cards if c["tier"] == tier and c["id"] not in top_ids])
@@ -138,6 +150,7 @@ def generate_report(
         sections=sections,
         max_price=max_price,
         buyer=settings.buyer_profile,
+        notes=notes,
     )
     if output_path is None:
         settings.reports_dir.mkdir(parents=True, exist_ok=True)

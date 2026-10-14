@@ -15,9 +15,9 @@ and must be re-validated on pages captured with ``python -m auction_agent captur
 """
 from __future__ import annotations
 
-import json
 import re
-from datetime import datetime, timedelta, timezone
+import unicodedata
+from datetime import datetime, timezone
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlencode, urljoin, urlsplit
 
@@ -33,6 +33,7 @@ from ._parsing import (
     parse_plain_amount,
     paris_datetime,
 )
+from ..privacy import find_vin, redact
 from .base import AuctionAdapter, DocumentRef, LotDetail, LotStub, ParseError, SaleListing, SaleRef
 
 BASE_URL = "https://www.alcopa-auction.fr"
@@ -87,7 +88,31 @@ SPEC_FIELD_MAP = {
     "boîte de vitesse": "gearbox",
     "puissance": "power_hp",
 }
-IDENTITY_LABELS = {"immatriculation": "registration", "numéro de série": "vin", "numero de serie": "vin"}
+_IDENTITY_PATTERNS = (
+    ("vin", re.compile(r"s[ée]rie|\bvin\b|identification|ch[aâ]ssis|vehicle identification")),
+    ("registration", re.compile(r"immatricul|plaque")),
+)
+
+
+def _norm_label(text: str) -> str:
+    """'Immatriculation\xa0:' → 'immatriculation' (NFKC folds NBSP; trailing ':' removed)."""
+    return re.sub(r"[\s:]+$", "", unicodedata.normalize("NFKC", text)).strip().lower()
+
+
+def _identity_kind(label: str) -> Optional[str]:
+    if label.startswith("date") or "mise en circulation" in label:
+        return None  # "Date de 1ère immatriculation" is a date, not the plate
+    for kind, rx in _IDENTITY_PATTERNS:
+        if rx.search(label):
+            return kind
+    return None
+
+
+def is_alcopa_url(url: str) -> bool:
+    """https URL on alcopa-auction.fr or one of its sub-domains (dot boundary enforced)."""
+    parts = urlsplit(url)
+    host = (parts.hostname or "").lower()
+    return parts.scheme == "https" and (host == "alcopa-auction.fr" or host.endswith(".alcopa-auction.fr"))
 
 
 def _category(path_segment: str) -> str:
@@ -115,6 +140,13 @@ def normalise_fuel(raw: Optional[str]) -> Optional[str]:
     if raw.upper() in FUEL_CODES:
         return FUEL_CODES[raw.upper()]
     low = raw.lower()
+    if "hybride" in low or (("électri" in low or "electri" in low)
+                            and any(w in low for w in ("essence", "gazole", "diesel"))):
+        if "non rechargeable" in low:
+            return "hybrid"
+        if "rechargeable" in low:
+            return "plugin_hybrid"
+        return "hybrid"
     for word, fuel in FUEL_WORDS.items():
         if word in low:
             return fuel
@@ -148,8 +180,7 @@ def parse_card(card: Tag) -> Optional[LotStub]:
     if link is None or not link.get("href"):
         return None
     detail_url = urljoin(BASE_URL, str(link["href"]))
-    parts = urlsplit(detail_url)
-    if parts.scheme not in ("http", "https") or not parts.netloc.endswith("alcopa-auction.fr"):
+    if not is_alcopa_url(detail_url):
         raise ParseError(f"Unexpected lot link {detail_url!r}")
     ident = product_id_from_url(detail_url)
     if ident is None:
@@ -208,8 +239,15 @@ def parse_card(card: Tag) -> Optional[LotStub]:
             stub.battery_soh_pct = float(battery.group(1))
 
     countdown = card.select_one("[data-ts]")
-    if countdown is not None and str(countdown.get("data-ts", "")).isdigit():
-        stub.closing_hint_at = datetime.fromtimestamp(int(countdown["data-ts"]), tz=timezone.utc)
+    raw_ts = str(countdown.get("data-ts", "")) if countdown is not None else ""
+    if raw_ts.isascii() and raw_ts.isdigit():
+        ts = int(raw_ts)
+        if ts > 10**11:  # milliseconds
+            ts //= 1000
+        try:
+            stub.closing_hint_at = datetime.fromtimestamp(ts, tz=timezone.utc)
+        except (ValueError, OverflowError, OSError):
+            stub.closing_hint_at = None  # optional hint: never fail a card over it
     current = card.select_one("[data-current-price]")
     if current is not None:
         stub.current_price_attr = parse_plain_amount(current.get("data-current-price"))
@@ -222,9 +260,9 @@ def parse_sale_page(html: str, page: int = 1) -> dict[str, Any]:
     title_el = soup.select_one("h5.text-prim")
     title = title_el.get_text(" ", strip=True) if title_el else ""
     total = None
-    m = re.search(r"Nombre de lots\s*:\s*(?:<b>)?\s*(\d+)", html)
+    m = re.search(r"Nombre de lots\s*:?\s*(\d{1,3}(?:[ \u00a0\u202f.]\d{3})+|\d+)", soup.get_text(" "))
     if m:
-        total = int(m.group(1))
+        total = first_int(m.group(1))
     else:
         count_el = soup.select_one(".founded_items .nb_items")
         if count_el is not None:
@@ -236,7 +274,7 @@ def parse_sale_page(html: str, page: int = 1) -> dict[str, Any]:
     for card in cards:
         try:
             stub = parse_card(card)
-        except (ParseError, ValueError, AttributeError):
+        except (ParseError, ValueError, AttributeError, OverflowError, OSError):
             failures += 1
             continue
         if stub is None:
@@ -261,7 +299,7 @@ def parse_sale_page(html: str, page: int = 1) -> dict[str, Any]:
 
 
 def _has_next_page(soup: BeautifulSoup, current_page: int) -> bool:
-    if soup.select_one("button[name='page'][value='suivant']"):
+    if soup.select_one("button[name='page'][value='suivant']:not([disabled]):not([aria-disabled='true'])"):
         return True
     values = [int(b["value"]) for b in soup.select("button[name='page']") if str(b.get("value", "")).isdigit()]
     return any(v > current_page for v in values)
@@ -282,7 +320,7 @@ def parse_detail_page(html: str, external_id: str) -> LotDetail:
         th, td = row.select_one("th"), row.select_one("td")
         if th is None or td is None:
             continue
-        label = th.get_text(" ", strip=True).lower().rstrip(" :")
+        label = _norm_label(th.get_text(" ", strip=True))
         value = td.get_text(" ", strip=True)
         if label in specs:  # the table is rendered twice on lot pages
             continue
@@ -290,10 +328,12 @@ def parse_detail_page(html: str, external_id: str) -> LotDetail:
 
     fields: dict[str, Any] = {}
     for label, value in specs.items():
-        if label in IDENTITY_LABELS:
-            setattr(detail, IDENTITY_LABELS[label], value or None)
+        identity = _identity_kind(label)
+        if identity:
+            if getattr(detail, identity) is None:
+                setattr(detail, identity, value or None)
             continue
-        detail.raw_specs[label] = value[:200]
+        detail.raw_specs[label] = redact(value)[:200]
         key = SPEC_FIELD_MAP.get(label)
         if not key or not value:
             continue
@@ -317,6 +357,8 @@ def parse_detail_page(html: str, external_id: str) -> LotDetail:
             fields[key] = value.upper()
         elif key in {"trim", "body_type", "storage_location"}:
             fields[key] = value
+    if detail.vin is None:  # unusual label: recover the VIN from the values to hash it
+        detail.vin = next((v for v in map(find_vin, specs.values()) if v), None)
     detail.fields = fields
 
     # Cross-check the product id against the embedded damage JSON, when present.
@@ -337,9 +379,10 @@ def parse_detail_page(html: str, external_id: str) -> LotDetail:
             doc_type = "maintenance"
         elif "/getDocument/moba/" in href:
             doc_type = "battery"
-        if doc_type and doc_type not in seen_types:
+        url = urljoin(BASE_URL, href)
+        if doc_type and doc_type not in seen_types and is_alcopa_url(url):
             seen_types.add(doc_type)
-            detail.documents.append(DocumentRef(doc_type, urljoin(BASE_URL, href)))
+            detail.documents.append(DocumentRef(doc_type, url))
 
     photos = {str(a.get("href")) for a in soup.select("a[data-gallery='pictures']") if a.get("href")}
     detail.photo_count = len(photos) or (1 if soup.select_one("img[itemprop='image']") else 0)
@@ -373,7 +416,7 @@ def parse_detail_page(html: str, external_id: str) -> LotDetail:
         fields["battery_leased"] = 1
 
     crumb = soup.select_one("a[href*='/salle-de-vente-encheres/'], a[href*='/vente-encheres-en-ligne/']")
-    if crumb is not None:
+    if crumb is not None and is_alcopa_url(urljoin(BASE_URL, str(crumb["href"]))):
         detail.sale_url = urljoin(BASE_URL, str(crumb["href"]))
     return detail
 
@@ -392,6 +435,7 @@ class AlcopaAdapter(AuctionAdapter):
     ROOM_FEE_RATE_TTC = 0.144
     ROOM_FEE_MIN_TTC = 360.0
     VAT_RATE = 0.20
+    MAX_PAGES = 200  # hard stop for a listing walk
 
     def sale_from_url(self, url: str) -> SaleRef:
         full = urljoin(BASE_URL, url)
@@ -420,26 +464,40 @@ class AlcopaAdapter(AuctionAdapter):
         failures = duplicates = pages = 0
         meta: dict[str, Any] = {}
         page = 1
+        page_cap = self.MAX_PAGES
+        first_page_cards = 0
+        last_cards = 0
         while True:
             html = self.http.get_text(self._page_url(sale.url, page), referer=sale.url)
             parsed = parse_sale_page(html, page)
             pages += 1
             if page == 1:
                 meta = parsed
+                first_page_cards = parsed["cards"]
+                if parsed["expected_lots"] and first_page_cards:
+                    page_cap = min(page_cap, -(-parsed["expected_lots"] // first_page_cards) + 2)
             failures += parsed["parse_failures"]
+            added = 0
             for stub in parsed["stubs"]:
                 if stub.external_id in stubs:
                     duplicates += 1
                 else:
                     stubs[stub.external_id] = stub
-            if not parsed["stubs"] and parsed["cards"] == 0:
-                if page == 1:
-                    reasons.append("no_cards_on_first_page")
+                    added += 1
+            last_cards = parsed["cards"]
+            if parsed["cards"] == 0:
+                reasons.append("no_cards_on_first_page" if page == 1 else f"empty_page={page}")
+                break
+            if page > 1 and added == 0:
+                reasons.append(f"duplicate_page={page}")  # site served an earlier page again
                 break
             if not parsed["has_next"]:
                 break
             if max_pages and page >= max_pages:
                 reasons.append(f"scoped:max_pages={max_pages}")
+                break
+            if page >= page_cap:
+                reasons.append(f"page_cap_hit={page_cap}")
                 break
             page += 1
 
@@ -462,6 +520,10 @@ class AlcopaAdapter(AuctionAdapter):
         if failures:
             reasons.append(f"card_parse_failures={failures}")
         expected = enriched.expected_lots
+        if expected is None:
+            reasons.append("expected_lots_unknown")
+            if pages > 1 and last_cards and last_cards == first_page_cards:
+                reasons.append("last_page_full")  # cannot tell whether a page is missing
         if expected is not None:
             tolerance = max(2, round(expected * 0.02))
             if len(stubs) < expected - tolerance:

@@ -3,7 +3,6 @@ import subprocess
 import sys
 from datetime import date, datetime, timezone
 
-import pytest
 
 from auction_agent import cli, db
 from auction_agent.adapters.base import LotStub, SaleRef
@@ -41,8 +40,8 @@ def fresh_ct():
 def seed(conn, n=8, base_price=10_000.0, comments=None):
     """n similar Toyota Yaris in one upcoming online sale, each with a fresh favourable CT."""
     sale = SaleRef(house="alcopa", external_id="S1", url="https://www.alcopa-auction.fr/vente-encheres-en-ligne/1",
-                   kind="online", starts_at=datetime(2026, 10, 20, 14, tzinfo=timezone.utc),
-                   ends_at=datetime(2026, 10, 21, 18, tzinfo=timezone.utc))
+                   kind="online", starts_at=datetime(2026, 10, 16, 14, tzinfo=timezone.utc),
+                   ends_at=datetime(2026, 10, 17, 18, tzinfo=timezone.utc))
     stubs = [LotStub(house="alcopa", external_id=str(100000 + i), category="voiture",
                      detail_url=f"https://www.alcopa-auction.fr/voiture-occasion/toyota/yaris-{100000 + i}",
                      brand="TOYOTA", model="YARIS", trim="YARIS 1.5 HYBRIDE 116H", fuel="hybrid", year=2019,
@@ -54,7 +53,7 @@ def seed(conn, n=8, base_price=10_000.0, comments=None):
         db.apply_snapshot(conn, "alcopa", sale_id, stubs, NOW_S)
         for (vid,) in conn.execute("SELECT id FROM vehicles"):
             db.update_vehicle_detail(conn, vid, {"first_registration": "2019-03-15", "comments": comments})
-            db.set_ingest_state(conn, vid, state="complete", now=NOW_S, ct_state="present")
+            db.mark_complete(conn, vid, ct_state="present")
             db.upsert_document(conn, vid, {"doc_type": "ct", "source_url": "u", "fetch_status": "ok",
                                            "parse_status": "parsed", "parsed": ct}, NOW_S)
     return sale_id
