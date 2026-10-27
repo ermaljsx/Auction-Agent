@@ -448,12 +448,15 @@ _DAY_MONTH_RE = re.compile(r"(\d{1,2})(?:er)?\s+([a-zéûè]+)\b(?!\s+\d{4})", r
 
 def _sale_date(text: str, today: date) -> Optional[date]:
     """Full date if present, else 'lundi 2 novembre' with the year that keeps it near today."""
+    text = re.sub(r"(\d)\s+er\b", r"\1er", text, flags=re.IGNORECASE)  # '1<sup>er</sup>' → '1 er'
     full = parse_fr_date(text)
     if full:
         return full
-    m = _DAY_MONTH_RE.search(text)
-    month = MONTHS_FR.get(m.group(2).lower(), 0) if m else 0
-    if not month:
+    for m in _DAY_MONTH_RE.finditer(text):  # skip '85 véhicules', '9h30 lundi'…
+        month = MONTHS_FR.get(m.group(2).lower(), 0)
+        if month:
+            break
+    else:
         return None
     for year in (today.year, today.year + 1):
         try:
@@ -513,18 +516,17 @@ def parse_sale_links(html: str, today: date, room: Optional[str] = None) -> list
 
 def pick_weekly_sale(candidates: list[dict[str, Any]], today: date, *,
                      weekday: int = 0, hints: tuple[str, ...] = ("tourisme",)) -> Optional[dict[str, Any]]:
-    """The next sale on `weekday` (Monday) from today on, preferring titles with a hint.
+    """This week's sale on `weekday` (Monday): the one sale in the next 7 days whose title
+    carries a hint ("Tourisme"). Sale ids are not in date order, so only the parsed date counts.
 
-    Sale ids are not in date order, so only the parsed date counts.
+    Anything ambiguous (no dated match this week, or several) returns None: the caller then
+    tries the calendar, or stops, rather than crawling next week's or the wrong sale.
     """
+    last = today + timedelta(days=6)
     pool = [c for c in candidates
-            if c["sale_date"] and c["sale_date"] >= today and c["sale_date"].weekday() == weekday]
-    if not pool:
-        return None
-    first_day = min(c["sale_date"] for c in pool)
-    same_day = [c for c in pool if c["sale_date"] == first_day]
-    hinted = [c for c in same_day if any(h in _fold(c["text"]) for h in hints)]
-    return min(hinted or same_day, key=lambda c: c["external_id"])
+            if c["sale_date"] and today <= c["sale_date"] <= last and c["sale_date"].weekday() == weekday]
+    hinted = [c for c in pool if any(h in _fold(c["text"]) for h in hints)]
+    return hinted[0] if len(hinted) == 1 else None
 
 
 def structure_hints(html: str) -> str:

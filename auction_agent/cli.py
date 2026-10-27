@@ -20,7 +20,7 @@ from rich.markup import escape
 
 from . import db
 from .adapters import get_adapter_class
-from .adapters.alcopa import BASE_URL as ALCOPA_BASE_URL
+from .adapters.alcopa import BASE_URL as ALCOPA_BASE_URL, WEEKLY_SALE_QUERY
 from .config import DEFAULT_SALE_URL, PROJECT_DIR, EnvFileReport, Settings, load_env_file
 from .http_client import FetchError, PoliteClient
 from .documents import sweep_quarantine
@@ -99,7 +99,10 @@ def cmd_crawl(args: argparse.Namespace, settings: Settings) -> int:
         console.print(f"  {'sale id':>14}: {report.sale_id}  (use with run_advisor.py --sale-id)")
     for key, value in report.counts.items():
         console.print(f"  {key:>14}: {value}")
-    for reason in report.reasons:
+    reasons = report.reasons
+    if quiet:  # public logs: no per-car URLs (detail pages, tokenised document links)
+        reasons = list(dict.fromkeys(re.sub(r"https?://\S+", "<url>", r) for r in reasons))
+    for reason in reasons:
         console.print(f"  [yellow]note[/yellow] {escape(reason)}", highlight=False)
     if quiet:  # public logs (GitHub Actions): counts only, no per-car lines
         if report.failures:
@@ -118,7 +121,7 @@ def cmd_recon(args: argparse.Namespace, settings: Settings) -> int:
     paths = {
         "room page": f"/salle-de-vente-encheres/{args.room}",
         "sales calendar": "/calendrier-des-ventes",
-        "sale listing": f"/salle-de-vente-encheres/{args.room}/1",
+        "sale listing": f"/salle-de-vente-encheres/{args.room}/1?{WEEKLY_SALE_QUERY}&page=1",
         "lot detail": "/voiture-occasion/marque/modele-123456",
         "CT document": "/getDocument/ct/x",
     }

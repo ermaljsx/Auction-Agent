@@ -2,6 +2,8 @@
 import argparse
 from datetime import date, datetime
 
+import pytest
+
 from auction_agent import cli, db
 from auction_agent.adapters.alcopa import (
     AlcopaAdapter,
@@ -157,3 +159,79 @@ class _FixedDatetime(datetime):
     @classmethod
     def now(cls, tz=None):
         return datetime(2026, 10, 27, 10, 0, tzinfo=tz)
+
+
+# ------------------------------------------------------------------ review findings (Phase 0)
+
+from auction_agent.adapters.alcopa import _sale_date  # noqa: E402
+
+
+def _card(sale_id, text):
+    return f'<div class="sale"><h5>{text}</h5><a href="/salle-de-vente-encheres/beauvais/{sale_id}">Voir</a></div>'
+
+
+def test_undated_sale_this_week_never_falls_through_to_next_week():
+    """F1: if this week's sale cannot be dated, choose nothing (the calendar is tried next)."""
+    html = "<html><body>" + _card("10231", "Véhicules Utilitaires et Tourisme - Lun. 2 nov.") + _card(
+        "10250", "Lundi 9 novembre 2026 : Véhicules Utilitaires et Tourisme") + "</body></html>"
+    assert pick_weekly_sale(parse_sale_links(html, TODAY, "beauvais"), TODAY) is None
+    http = FakeHttp({ROOM: html, "/calendrier-des-ventes": CALENDAR})
+    sale, diag = AlcopaAdapter(http).resolve_next_sale("beauvais", today=TODAY)
+    assert sale.external_id == "10231" and http.count("/calendrier-des-ventes") == 1
+
+
+@pytest.mark.parametrize("cards", [
+    [("10230", "Lundi 2 novembre 2026 : Véhicules non roulants")],  # no hinted sale this week
+    [("10230", "Lundi 2 novembre 2026 : Tourisme non roulants"),
+     ("10231", "Lundi 2 novembre 2026 : Véhicules Utilitaires et Tourisme")],  # two hinted: ambiguous
+])
+def test_ambiguous_or_unhinted_same_day_sales_choose_nothing(cards):
+    """F2: never fall back to an arbitrary same-day sale (non-runners) or pick by id order."""
+    html = "<html><body>" + "".join(_card(i, t) for i, t in cards) + "</body></html>"
+    assert pick_weekly_sale(parse_sale_links(html, TODAY, "beauvais"), TODAY) is None
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("Véhicules Utilitaires et Tourisme - 85 véhicules - Lundi 2 novembre", date(2026, 11, 2)),
+    ("9h30 Lundi 2 novembre", date(2026, 11, 2)),
+    ("Vente 10231 du lundi 2 novembre", date(2026, 11, 2)),
+    ("Lundi 1 er février 2027", date(2027, 2, 1)),
+    ("Lundi 1er février", date(2027, 2, 1)),
+])
+def test_french_sale_card_dates(text, expected):
+    """F3: the first '<number> <word>' is not always the date; '1<sup>er</sup>' reads as '1 er'."""
+    today = TODAY if expected.year == 2026 else date(2027, 1, 26)
+    assert _sale_date(text, today) == expected
+
+
+def test_quiet_crawl_never_prints_urls_from_notes(settings, monkeypatch, capsys):
+    """F4: robots-disallowed documents and blocked detail pages leave no per-car URL in public logs."""
+    from auction_agent.http_client import RobotsDisallowedError
+    sale = "/salle-de-vente-encheres/beauvais/10231"
+    query = "sort=number_asc&category_view=VP"
+    routes = {ROOM: ROOM_PAGE, f"{sale}?{query}&page=1": read_fixture("alcopa", "sale_page1.html"),
+              f"{sale}?{query}&page=2": read_fixture("alcopa", "sale_page2.html")}
+    for pid, path in IDS.items():
+        routes[path] = detail_html(pid, f"SECRET{pid}")
+        routes[f"/getDocument/ct/SECRET{pid}"] = RobotsDisallowedError(
+            f"robots.txt disallows https://www.alcopa-auction.fr/getDocument/ct/SECRET{pid}")
+    _fake_client(monkeypatch, FakeHttp(routes))
+    monkeypatch.setattr("auction_agent.adapters.alcopa.datetime", _FixedDatetime)
+    args = argparse.Namespace(house="alcopa", url=ROOM, pages=None, limit=None, no_docs=False,
+                              force_unlock=False, quiet=True)
+    assert cli.cmd_crawl(args, settings) == 0
+    out = capsys.readouterr().out
+    assert "documents_disallowed_by_robots" in out
+    assert "SECRET" not in out and "getDocument" not in out and "/voiture-occasion/" not in out
+    for pid in IDS:
+        assert pid not in out
+
+
+def test_recon_checks_the_listing_url_the_crawl_really_uses(settings, monkeypatch, capsys):
+    """F6: the robots verdict for the listing includes the query string the crawler sends."""
+    http = FakeHttp({ROOM: ROOM_PAGE})
+    http.disallow = ("/salle-de-vente-encheres/beauvais/1?sort",)
+    _fake_client(monkeypatch, http)
+    monkeypatch.setattr("auction_agent.adapters.alcopa.datetime", _FixedDatetime)
+    cli.cmd_recon(argparse.Namespace(house="alcopa", room="beauvais"), settings)
+    assert "sale listing: DISALLOWED" in capsys.readouterr().out

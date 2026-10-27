@@ -43,7 +43,9 @@ jobs:
       - name: Install
         run: pip install -r requirements.txt
       - name: Recon (robots.txt, this week's sale)
-        run: python -m auction_agent recon --room beauvais
+        # Exit 3 (no sale resolved) is tolerated only when a sale URL was given by hand;
+        # a block (exit 2) always stops the job.
+        run: python -m auction_agent recon --room beauvais || { rc=$?; [ "$rc" -eq 3 ] && [ -n "$SALE_URL" ]; }
       - name: Crawl 3 lots (first listing page only)
         run: python -m auction_agent crawl --url "${SALE_URL:-/salle-de-vente-encheres/beauvais}" --pages 1 --limit 3 --quiet
       - name: Score (at most 5 AI reviews)

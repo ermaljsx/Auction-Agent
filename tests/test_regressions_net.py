@@ -239,3 +239,17 @@ def test_hex_env_key_is_decoded_and_file_key_is_stable(tmp_path, monkeypatch):
     path = tmp_path / "data" / "identity.key"
     first = load_identity_key(path)
     assert len(first) == MIN_KEY_BYTES and load_identity_key(path) == first
+
+
+# ------------------------------------------------------------------ robots unreadable (Phase 0 review F5)
+
+def test_unreadable_robots_raises_instead_of_answering_no(server, client):  # noqa: F811
+    from auction_agent.http_client import RobotsUnreadableError
+    _Handler.routes = {"/robots.txt": (429, {}, b"slow down")}
+    with pytest.raises(RobotsUnreadableError):
+        client.robots_allows(f"{server}/salle-de-vente-encheres/beauvais")
+    assert _Handler.hits["/robots.txt"] == 1
+    _Handler.routes = {"/robots.txt": (200, {}, b"User-agent: *\nDisallow: /getDocument/\n")}
+    client._hosts.clear()
+    assert client.robots_allows(f"{server}/getDocument/ct/x") is False
+    assert client.robots_allows(f"{server}/voiture-occasion/a/b-123456") is True

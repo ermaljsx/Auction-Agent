@@ -44,6 +44,10 @@ class RobotsDisallowedError(FetchError):
     """robots.txt disallows this URL (or robots.txt could not be read)."""
 
 
+class RobotsUnreadableError(RobotsDisallowedError):
+    """robots.txt could not be read (error status, too large): treated as disallow-all."""
+
+
 class DocumentTooLargeError(FetchError):
     pass
 
@@ -183,10 +187,13 @@ class PoliteClient:
     def robots_allows(self, url: str) -> bool:
         """Whether robots.txt lets us fetch url (robots.txt is fetched once per host).
 
-        An unreadable robots.txt counts as "no", as in get(). A block still raises.
+        An unreadable robots.txt (error status, rate limit) raises instead of answering, so a
+        caller stops at once rather than asking again for every path. A block also raises.
         """
         try:
             self._check_robots(url)
+        except RobotsUnreadableError:
+            raise
         except RobotsDisallowedError:
             return False
         return True
@@ -246,7 +253,7 @@ class PoliteClient:
             try:
                 result = self._request(f"{key}/robots.txt", referer=None, max_bytes=512 * 1024)
             except DocumentTooLargeError as exc:
-                raise RobotsDisallowedError(f"{key}/robots.txt larger than 512 KiB") from exc
+                raise RobotsUnreadableError(f"{key}/robots.txt larger than 512 KiB") from exc
             if result.status in (403, 405) or _looks_like_challenge(result):
                 raise BlockedError(f"{key}/robots.txt: blocked or challenged (HTTP {result.status})")
             if result.status in (404, 410):
@@ -255,7 +262,7 @@ class PoliteClient:
                 state.robots = parse_robots(result.text)
             else:
                 # RFC 9309: an unreachable robots.txt means "assume complete disallow".
-                raise RobotsDisallowedError(f"{key}/robots.txt unreadable (HTTP {result.status})")
+                raise RobotsUnreadableError(f"{key}/robots.txt unreadable (HTTP {result.status})")
             state.robots_checked = True
         if state.robots is not None and not state.robots.can_fetch(self.settings.robots_token, url):
             raise RobotsDisallowedError(f"robots.txt disallows {url}")

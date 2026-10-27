@@ -295,7 +295,7 @@ def _ingest_vehicle(conn, settings, adapter, stub, row, sale_id, action, options
             doc = fetch_document(adapter.http, doc_type, ref.url, settings, referer=stub.detail_url)
         except RobotsDisallowedError as exc:
             # Documents disallowed by robots.txt: keep going with the rest of the sale.
-            doc_notes.add(f"documents_disallowed_by_robots: {exc}")
+            doc_notes.add("documents_disallowed_by_robots")  # no URL: document links carry tokens
             if doc_type == "ct" and not existing_ok:
                 ct_state, docs_ok = "failed", False
             continue
