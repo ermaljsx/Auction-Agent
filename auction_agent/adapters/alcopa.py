@@ -17,14 +17,17 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlencode, urljoin, urlsplit
 
 from bs4 import BeautifulSoup, Tag
 
 from ..config import DEFAULT_SALE_URL
+from ..http_client import BlockedError, FetchError, RateLimitedError, RobotsDisallowedError
 from ._parsing import (
+    MONTHS_FR,
+    PARIS,
     first_int,
     parse_eur,
     parse_fr_date,
@@ -42,6 +45,10 @@ _PRODUCT_PATH_RE = re.compile(r"^/(?:[a-z]{2}/)?(?P<cat>[a-z-]+)/[^/]+/[^/]+-(?P
 _SALE_PATH_RE = re.compile(
     r"^/(?:(?P<room_kind>salle-de-vente-encheres)/(?P<room>[^/]+)|(?P<online>vente-encheres-en-ligne))/(?P<id>\d+)/?$"
 )
+_ROOM_PATH_RE = re.compile(r"^/salle-de-vente-encheres/(?P<room>[a-z0-9-]+)/?$")
+CALENDAR_PATH = "/calendrier-des-ventes"
+# The weekly view used since the prototype: passenger cars, sorted by lot number.
+WEEKLY_SALE_QUERY = "sort=number_asc&category_view=VP"
 
 FUEL_CODES = {
     # French registration (carte grise P.3) codes as shown on Alcopa cards.
@@ -424,6 +431,115 @@ def parse_detail_page(html: str, external_id: str) -> LotDetail:
 # --------------------------------------------------------------------------- adapter
 
 
+# --------------------------------------------------------------------------- weekly sale
+
+
+def room_from_url(url: str) -> Optional[str]:
+    """'/salle-de-vente-encheres/beauvais' (a room, no sale id) → 'beauvais', else None."""
+    parts = urlsplit(urljoin(BASE_URL, url))
+    if not is_alcopa_url(parts.geturl()):
+        return None
+    m = _ROOM_PATH_RE.match(parts.path)
+    return m.group("room") if m else None
+
+
+_DAY_MONTH_RE = re.compile(r"(\d{1,2})(?:er)?\s+([a-zéûè]+)\b(?!\s+\d{4})", re.IGNORECASE)
+
+
+def _sale_date(text: str, today: date) -> Optional[date]:
+    """Full date if present, else 'lundi 2 novembre' with the year that keeps it near today."""
+    full = parse_fr_date(text)
+    if full:
+        return full
+    m = _DAY_MONTH_RE.search(text)
+    month = MONTHS_FR.get(m.group(2).lower(), 0) if m else 0
+    if not month:
+        return None
+    for year in (today.year, today.year + 1):
+        try:
+            candidate = date(year, month, int(m.group(1)))
+        except ValueError:
+            return None
+        if candidate >= today - timedelta(days=7):
+            return candidate
+    return None
+
+
+def _sale_id(href: str) -> Optional[tuple[str, str]]:
+    url = urljoin(BASE_URL, href)
+    if not is_alcopa_url(url):
+        return None
+    m = _SALE_PATH_RE.match(urlsplit(url).path)
+    return (m.group("room"), m.group("id")) if m and m.group("room") else None
+
+
+def _context_text(link: Tag, today: date) -> str:
+    """Text of the smallest block around a link that names one sale and, ideally, its date."""
+    text = link.get_text(" ", strip=True)
+    node = link
+    for _ in range(5):
+        parent = node.parent
+        if parent is None or parent.name in ("body", "html", "[document]"):
+            break
+        ids = {sid[1] for a in parent.select("a[href]") if (sid := _sale_id(a["href"]))}
+        if len(ids) > 1:
+            break  # the block now covers several sales: its dates are not this one's
+        node = parent
+        text = node.get_text(" ", strip=True)
+        if _sale_date(text, today):
+            break
+    return re.sub(r"\s+", " ", text)[:300]
+
+
+def parse_sale_links(html: str, today: date, room: Optional[str] = None) -> list[dict[str, Any]]:
+    """Room-sale links on a room or calendar page, each with the date and title around it."""
+    soup = _soup(html)
+    found: dict[str, dict[str, Any]] = {}
+    for link in soup.select("a[href]"):
+        sid = _sale_id(link["href"])
+        if sid is None or (room and sid[0] != room):
+            continue
+        text = _context_text(link, today)
+        entry = found.setdefault(sid[1], {
+            "external_id": sid[1], "room": sid[0], "text": text, "sale_date": None,
+            "url": f"{BASE_URL}/salle-de-vente-encheres/{sid[0]}/{sid[1]}",
+        })
+        if entry["sale_date"] is None:
+            day = _sale_date(text, today)
+            if day:
+                entry["sale_date"], entry["text"] = day, text
+    return list(found.values())
+
+
+def pick_weekly_sale(candidates: list[dict[str, Any]], today: date, *,
+                     weekday: int = 0, hints: tuple[str, ...] = ("tourisme",)) -> Optional[dict[str, Any]]:
+    """The next sale on `weekday` (Monday) from today on, preferring titles with a hint.
+
+    Sale ids are not in date order, so only the parsed date counts.
+    """
+    pool = [c for c in candidates
+            if c["sale_date"] and c["sale_date"] >= today and c["sale_date"].weekday() == weekday]
+    if not pool:
+        return None
+    first_day = min(c["sale_date"] for c in pool)
+    same_day = [c for c in pool if c["sale_date"] == first_day]
+    hinted = [c for c in same_day if any(h in _fold(c["text"]) for h in hints)]
+    return min(hinted or same_day, key=lambda c: c["external_id"])
+
+
+def structure_hints(html: str) -> str:
+    """A short, public description of a page we could not parse (for the recon log)."""
+    soup = _soup(html)
+    title = soup.title.get_text(" ", strip=True)[:60] if soup.title else ""
+    sale_hrefs = [a["href"] for a in soup.select("a[href]") if "vente" in a["href"]][:6]
+    heads = [h.get_text(" ", strip=True)[:50] for h in soup.select("h1, h2, h3, h5")[:4]]
+    return f"title={title!r} heads={heads} sale-like links={sale_hrefs}"
+
+
+def _fold(text: str) -> str:
+    return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii").lower()
+
+
 class AlcopaAdapter(AuctionAdapter):
     slug = "alcopa"
     display_name = "Alcopa Auction"
@@ -451,6 +567,49 @@ class AlcopaAdapter(AuctionAdapter):
         raise NotImplementedError(
             "Sale discovery needs the Phase 2 live recon of the calendar page; pass --url."
         )
+
+    @staticmethod
+    def room_from_url(url: str) -> Optional[str]:
+        return room_from_url(url)
+
+    def resolve_next_sale(self, room: str, today: Optional[date] = None) -> tuple[Optional[SaleRef], dict[str, Any]]:
+        """This week's sale for a room: the room page first, the sales calendar if needed.
+
+        Returns (sale or None, diagnostics). Costs one or two polite requests; a block
+        (BlockedError) is not caught, so the run stops as usual.
+        """
+        today = today or datetime.now(PARIS).date()
+        diag: dict[str, Any] = {"room": room, "today": today.isoformat(), "pages": {}, "chosen": None}
+        candidates: dict[str, dict[str, Any]] = {}
+        choice = None
+        for name, path in (("room", f"/salle-de-vente-encheres/{room}"), ("calendar", CALENDAR_PATH)):
+            try:
+                html = self.http.get_text(f"{BASE_URL}{path}")
+            except FetchError as exc:
+                if isinstance(exc, (BlockedError, RateLimitedError, RobotsDisallowedError)):
+                    raise
+                diag["pages"][name] = f"error: {exc.__class__.__name__}"
+                continue
+            links = parse_sale_links(html, today, room)
+            diag["pages"][name] = len(links)
+            if not links:
+                diag.setdefault("hints", {})[name] = structure_hints(html)
+            for link in links:
+                known = candidates.get(link["external_id"])
+                if known is None or (known["sale_date"] is None and link["sale_date"]):
+                    candidates[link["external_id"]] = link
+            choice = pick_weekly_sale(list(candidates.values()), today)
+            if choice:
+                break
+        diag["candidates"] = sorted(
+            ({"id": c["external_id"], "date": c["sale_date"].isoformat() if c["sale_date"] else None,
+              "text": c["text"][:80]} for c in candidates.values()),
+            key=lambda c: (c["date"] or "9999", c["id"]),
+        )
+        if choice is None:
+            return None, diag
+        diag["chosen"] = {"id": choice["external_id"], "date": choice["sale_date"].isoformat()}
+        return self.sale_from_url(f"{choice['url']}?{WEEKLY_SALE_QUERY}"), diag
 
     def _page_url(self, sale_url: str, page: int) -> str:
         parts = urlsplit(sale_url)

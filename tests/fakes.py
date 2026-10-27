@@ -47,6 +47,11 @@ class FakeHttp:
         ctype = "application/pdf" if data.startswith(b"%PDF") else "text/html; charset=utf-8"
         return FetchResult(url=url, status=200, headers={"content-type": ctype}, content=data)
 
+    def robots_allows(self, url: str) -> bool:
+        return not any(url.startswith(prefix) or self._key(url).startswith(prefix) for prefix in self.disallow)
+
+    disallow: tuple[str, ...] = ()
+
     def count(self, prefix: str) -> int:
         return sum(n for k, n in self.calls.items() if k.startswith(prefix))
 

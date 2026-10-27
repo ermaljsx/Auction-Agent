@@ -49,11 +49,38 @@ def llm_status(settings: Settings, env_report: Optional[EnvFileReport] = None) -
 # --------------------------------------------------------------------------- crawl
 
 
+def _print_resolution(diag: dict) -> None:
+    pages = ", ".join(f"{name}: {value}" for name, value in diag.get("pages", {}).items())
+    console.print(f"  room {diag.get('room')}, today {diag.get('today')}; sale links found ({pages})",
+                  markup=False, highlight=False)
+    for c in diag.get("candidates", [])[:15]:
+        console.print(f"    {c['id']:>6}  {c['date'] or '????-??-??'}  {c['text']}", markup=False, highlight=False)
+    for name, hint in diag.get("hints", {}).items():
+        console.print(f"  {name} page structure: {hint}", markup=False, highlight=False)
+    chosen = diag.get("chosen")
+    console.print(f"  chosen: {chosen['id']} on {chosen['date']}" if chosen else "  chosen: none",
+                  markup=False, highlight=False)
+
+
+def resolve_sale_url(adapter, url: str) -> Optional[str]:
+    """A room URL becomes this week's sale URL (None if none was found); others pass through."""
+    room = adapter.room_from_url(url) if hasattr(adapter, "room_from_url") else None
+    if room is None:
+        return url
+    sale, diag = adapter.resolve_next_sale(room)
+    _print_resolution(diag)
+    return sale.url if sale else None
+
+
 def cmd_crawl(args: argparse.Namespace, settings: Settings) -> int:
     adapter_cls = get_adapter_class(args.house)
-    sale_url = urljoin(adapter_cls.base_url + "/", args.url)
     with PoliteClient(settings) as http:
         adapter = adapter_cls(http)
+        sale_url = resolve_sale_url(adapter, urljoin(adapter_cls.base_url + "/", args.url))
+        if sale_url is None:
+            console.print("[red]No upcoming sale found for this room; pass a sale URL with --url.[/red]")
+            return 3
+        quiet = getattr(args, "quiet", False)
         report = run_crawl(
             settings,
             adapter,
@@ -64,7 +91,7 @@ def cmd_crawl(args: argparse.Namespace, settings: Settings) -> int:
                 download_docs=not args.no_docs,
                 force_unlock=args.force_unlock,
             ),
-            log=lambda msg: console.print(msg, markup=False, highlight=False),
+            log=(lambda _msg: None) if quiet else (lambda msg: console.print(msg, markup=False, highlight=False)),
         )
     style = {"ok": "green", "incomplete": "yellow"}.get(report.status, "red")
     console.rule(f"[bold {style}]Crawl {report.status}[/bold {style}]")
@@ -74,10 +101,40 @@ def cmd_crawl(args: argparse.Namespace, settings: Settings) -> int:
         console.print(f"  {key:>14}: {value}")
     for reason in report.reasons:
         console.print(f"  [yellow]note[/yellow] {escape(reason)}", highlight=False)
-    for failure in report.failures[:10]:
-        console.print(f"  [red]failed[/red] {escape(str(failure['external_id']))}: {escape(str(failure['error']))}",
-                      highlight=False)
+    if quiet:  # public logs (GitHub Actions): counts only, no per-car lines
+        if report.failures:
+            console.print(f"  [red]failed[/red] {len(report.failures)} vehicle(s)", highlight=False)
+    else:
+        for failure in report.failures[:10]:
+            console.print(f"  [red]failed[/red] {escape(str(failure['external_id']))}: {escape(str(failure['error']))}",
+                          highlight=False)
     return 0 if report.status in ("ok", "incomplete") else 2
+
+
+def cmd_recon(args: argparse.Namespace, settings: Settings) -> int:
+    """Live check before any crawl: robots.txt rules, then this week's sale for a room."""
+    adapter_cls = get_adapter_class(args.house)
+    base = adapter_cls.base_url
+    paths = {
+        "room page": f"/salle-de-vente-encheres/{args.room}",
+        "sales calendar": "/calendrier-des-ventes",
+        "sale listing": f"/salle-de-vente-encheres/{args.room}/1",
+        "lot detail": "/voiture-occasion/marque/modele-123456",
+        "CT document": "/getDocument/ct/x",
+    }
+    with PoliteClient(settings) as http:
+        console.print("robots.txt:", markup=False)
+        for name, path in paths.items():
+            verdict = "allowed" if http.robots_allows(base + path) else "DISALLOWED"
+            console.print(f"  {name:>15}: {verdict}", markup=False, highlight=False)
+        adapter = adapter_cls(http)
+        sale, diag = adapter.resolve_next_sale(args.room)
+    console.print("this week's sale:", markup=False)
+    _print_resolution(diag)
+    if sale is None:
+        return 3
+    console.print(f"  url: {sale.url}", markup=False, highlight=False)
+    return 0
 
 
 # --------------------------------------------------------------------------- scoring / report
@@ -124,8 +181,12 @@ def cmd_stats(args: argparse.Namespace, settings: Settings) -> int:
         sales = conn.execute(
             "SELECT id, house, external_id, room, starts_at, status FROM sales ORDER BY starts_at DESC, id DESC LIMIT 20"
         ).fetchall()
+        summary = db.assessment_summary(conn)
     for key, value in stats.items():
         console.print(f"  {key:>18}: {value}", highlight=False)
+    console.print(f"  {'confidence':>18}: full {summary['full']}, partial {summary['partial']}", highlight=False)
+    for reason, count in summary["partial_reasons"].items():
+        console.print(f"  {'partial because':>18}: {reason} × {count}", markup=False, highlight=False)
     if sales:
         console.print("  sales (id = value for --sale-id):")
         for s in sales:
@@ -214,12 +275,19 @@ def build_parser() -> argparse.ArgumentParser:
 
     crawl = sub.add_parser("crawl", help="Crawl one sale (listing, detail pages, documents)")
     crawl.add_argument("--house", default="alcopa", help="Auction house adapter (default: alcopa)")
-    crawl.add_argument("--url", default=DEFAULT_SALE_URL, help="Sale page URL (path or full URL)")
+    crawl.add_argument("--url", default=DEFAULT_SALE_URL,
+                       help="Sale URL, or a room URL to crawl this week's sale there (default: Beauvais)")
     crawl.add_argument("--pages", type=int, default=None, help="Maximum listing pages")
     crawl.add_argument("--limit", type=int, default=None, help="Maximum vehicles to process")
     crawl.add_argument("--no-docs", action="store_true", help="Skip document downloads")
     crawl.add_argument("--force-unlock", action="store_true", help="Release a stuck crawl lock first")
+    crawl.add_argument("--quiet", action="store_true", help="Counts only, no per-vehicle lines (public logs)")
     crawl.set_defaults(func=cmd_crawl)
+
+    recon = sub.add_parser("recon", help="Check robots.txt and find this week's sale (2-4 requests)")
+    recon.add_argument("--house", default="alcopa", help="Auction house adapter (default: alcopa)")
+    recon.add_argument("--room", default="beauvais", help="Room slug, as in /salle-de-vente-encheres/<room>")
+    recon.set_defaults(func=cmd_recon)
 
     def add_score_args(p: argparse.ArgumentParser) -> None:
         p.add_argument("--no-llm", action="store_true",

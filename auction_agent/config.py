@@ -24,12 +24,10 @@ PROJECT_DIR = Path(__file__).resolve().parents[1]
 
 ISO_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 
-# Kept from the original prototype so `python run_crawl.py` keeps its meaning:
-# one Alcopa sale, passenger vehicles only.
-DEFAULT_SALE_URL = (
-    "/salle-de-vente-encheres/beauvais/10206"
-    "?sort=number_asc&category_view=VP"
-)
+# The owner's auction: the Alcopa Beauvais room. A room URL (no sale id) is resolved
+# on every run to this week's Monday sale, passenger vehicles only. A full sale URL
+# such as /salle-de-vente-encheres/beauvais/10206 still crawls that one sale.
+DEFAULT_SALE_URL = "/salle-de-vente-encheres/beauvais"
 
 # Cheapest OpenAI model not scheduled for retirement as of 2026-10-14 (prices and
 # deprecations: see README "Optional: OpenAI review"). Override with LLM_MODEL.

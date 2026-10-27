@@ -180,6 +180,17 @@ class PoliteClient:
             raise FetchError(f"{url}: HTTP {result.status}")
         return result.text
 
+    def robots_allows(self, url: str) -> bool:
+        """Whether robots.txt lets us fetch url (robots.txt is fetched once per host).
+
+        An unreadable robots.txt counts as "no", as in get(). A block still raises.
+        """
+        try:
+            self._check_robots(url)
+        except RobotsDisallowedError:
+            return False
+        return True
+
     # ----------------------------------------------------------------- internals
 
     def _host(self, url: str) -> tuple[str, _HostState]:

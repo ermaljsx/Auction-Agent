@@ -771,6 +771,27 @@ def finish_run(
     return cur.rowcount == 1
 
 
+_PARTIAL_FLAGS = ("price_unknown", "ct_absent", "mileage_unknown")
+
+
+def assessment_summary(conn: sqlite3.Connection) -> dict[str, Any]:
+    """How many assessments are complete, and why the others are 'partial' (capped at yellow)."""
+    out: dict[str, Any] = {"full": 0, "partial": 0, "partial_reasons": {}}
+    for confidence, count in conn.execute("SELECT confidence, count(*) FROM assessments GROUP BY confidence"):
+        out[confidence] = count
+    reasons: dict[str, int] = {}
+    for flags_json, basis in conn.execute(
+        "SELECT flags_json, value_basis FROM assessments WHERE confidence = 'partial'"
+    ):
+        keys = [f for f in json.loads(flags_json or "[]") if f in _PARTIAL_FLAGS]
+        if basis and basis.startswith("value_unknown") and basis != "value_unknown:price_unknown":
+            keys.append(basis)
+        for key in keys:
+            reasons[key] = reasons.get(key, 0) + 1
+    out["partial_reasons"] = dict(sorted(reasons.items(), key=lambda kv: -kv[1]))
+    return out
+
+
 def get_stats(conn: sqlite3.Connection) -> dict[str, Any]:
     q = lambda sql: conn.execute(sql).fetchone()[0]  # noqa: E731
     return {
