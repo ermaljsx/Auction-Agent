@@ -4,6 +4,7 @@ Standard library only. The store token (BLOB_READ_WRITE_TOKEN) is injected by Ve
 the store is connected to the project; it is never sent to the browser. The whole site sits
 behind Vercel Authentication, so only signed-in members reach this function.
 """
+import http.client
 import json
 import os
 import urllib.error
@@ -42,7 +43,7 @@ def load_snapshot(token: str, opener=urllib.request.urlopen, timeout: float = 10
             body = response.read(MAX_BYTES + 1)
     except urllib.error.HTTPError as exc:
         return _error(503, "no_snapshot") if exc.code == 404 else _error(502, "storage_error")
-    except (urllib.error.URLError, TimeoutError, OSError):
+    except (urllib.error.URLError, http.client.HTTPException, TimeoutError, OSError):
         return _error(502, "storage_unavailable")
     if len(body) > MAX_BYTES:
         return _error(502, "snapshot_too_large")

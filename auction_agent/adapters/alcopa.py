@@ -584,6 +584,7 @@ class AlcopaAdapter(AuctionAdapter):
         diag: dict[str, Any] = {"room": room, "today": today.isoformat(), "pages": {}, "chosen": None}
         candidates: dict[str, dict[str, Any]] = {}
         choice = None
+        last_error: Optional[FetchError] = None
         for name, path in (("room", f"/salle-de-vente-encheres/{room}"), ("calendar", CALENDAR_PATH)):
             try:
                 html = self.http.get_text(f"{BASE_URL}{path}")
@@ -591,6 +592,7 @@ class AlcopaAdapter(AuctionAdapter):
                 if isinstance(exc, (BlockedError, RateLimitedError, RobotsDisallowedError)):
                     raise
                 diag["pages"][name] = f"error: {exc.__class__.__name__}"
+                last_error = exc
                 continue
             links = parse_sale_links(html, today, room)
             diag["pages"][name] = len(links)
@@ -608,6 +610,10 @@ class AlcopaAdapter(AuctionAdapter):
               "text": c["text"][:80]} for c in candidates.values()),
             key=lambda c: (c["date"] or "9999", c["id"]),
         )
+        if choice is None and last_error is not None and all(
+            str(v).startswith("error:") for v in diag["pages"].values()
+        ):
+            raise last_error  # nothing could be read: a failure, not "no sale this week"
         if choice is None:
             return None, diag
         diag["chosen"] = {"id": choice["external_id"], "date": choice["sale_date"].isoformat()}

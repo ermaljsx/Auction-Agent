@@ -7,12 +7,13 @@ $taskName = "Auction Agent weekly crawl"
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $runner = Join-Path $PSScriptRoot "run_publish.ps1"
 $action = New-ScheduledTaskAction -Execute "powershell.exe" `
-    -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$runner`"" -WorkingDirectory $root
+    -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$runner`"" -WorkingDirectory $root
 $triggers = @(
     (New-ScheduledTaskTrigger -Weekly -DaysOfWeek Thursday -At "19:17"),
     (New-ScheduledTaskTrigger -Weekly -DaysOfWeek Saturday -At "09:43")
 )
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -RunOnlyIfNetworkAvailable `
+    -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
     -ExecutionTimeLimit (New-TimeSpan -Hours 3) -MultipleInstances IgnoreNew
 Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $triggers -Settings $settings `
     -Description "Auction Agent: crawl this week's Alcopa Beauvais sale, score it and publish it to the site." -Force | Out-Null

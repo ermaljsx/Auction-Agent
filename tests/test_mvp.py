@@ -291,3 +291,63 @@ def test_windows_task_runs_thursday_evening_and_saturday_and_catches_up():
     assert "-StartWhenAvailable" in task and "-MultipleInstances IgnoreNew" in task
     runner = (PROJECT_ROOT / "scripts" / "windows" / "run_publish.ps1").read_text(encoding="utf-8")
     assert "auction_agent publish" in runner and "-Encoding utf8" in runner
+
+
+# ------------------------------------------------------------------ review findings (Fable 5.1)
+
+def test_network_failure_while_finding_the_sale_is_a_failure_not_no_sale(settings, monkeypatch, tmp_path):
+    """F1: both pages unreachable -> 'failed' (exit 2, red banner), never 'no sale this week'."""
+    from auction_agent.http_client import FetchError
+    http = FakeHttp({ROOM: FetchError("HTTP 503"), "/calendrier-des-ventes": FetchError("HTTP 503")})
+    monkeypatch.setattr(cli, "PoliteClient", lambda _settings: http)
+    out = tmp_path / "out"
+    assert cli.cmd_publish(publish_args(out), settings, now=NOW) == 2
+    assert read_snapshot(out)["crawl"]["status"] == "failed"
+
+
+def test_one_unreachable_page_still_allows_no_sale(settings, monkeypatch, tmp_path):
+    from auction_agent.http_client import FetchError
+    http = FakeHttp({ROOM: FetchError("HTTP 503"), "/calendrier-des-ventes": "<html></html>"})
+    monkeypatch.setattr(cli, "PoliteClient", lambda _settings: http)
+    assert cli.cmd_publish(publish_args(tmp_path / "out"), settings, now=NOW) == 3
+
+
+def test_malformed_storage_response_maps_to_json_502():
+    """W5: http.client errors (IncompleteRead…) are not OSError: still a clean JSON 502."""
+    import http.client
+    api = _web_api()
+
+    def truncated(request, timeout):
+        raise http.client.IncompleteRead(b"{", 10)
+
+    status, body = api.load_snapshot(TOKEN, opener=truncated)
+    assert status == 502 and json.loads(body)["status"] == "storage_unavailable"
+
+
+def test_task_runs_on_battery_and_hidden():
+    """W2: Task Scheduler's defaults skip or kill the run on a laptop on battery."""
+    task = (PROJECT_ROOT / "scripts" / "windows" / "install_task.ps1").read_text(encoding="utf-8")
+    assert "-AllowStartIfOnBatteries" in task and "-DontStopIfGoingOnBatteries" in task
+    assert "-WindowStyle Hidden" in task
+
+
+@pytest.mark.skipif(__import__("shutil").which("node") is None, reason="needs node")
+def test_page_derives_the_sale_state_at_viewing_time():
+    """F2/W1: the snapshot is published before the sale, so the page must work out 'in progress'
+    and 'over' itself; Paris calendar day, sale under way from 08:00."""
+    import subprocess
+    script = (
+        "const m = require(process.argv[1]);"
+        "const s = {date: '2026-10-19', state: 'upcoming'};"
+        "const at = ['2026-10-17T07:43:00Z','2026-10-19T05:00:00Z','2026-10-19T09:00:00Z','2026-10-20T09:00:00Z'];"
+        "console.log(at.map(t => m.saleStateNow(s, new Date(t))).join(','));"
+    )
+    out = subprocess.run(["node", "-e", script, str(PROJECT_ROOT / "web" / "app.js")],
+                         capture_output=True, text=True, encoding="utf-8", check=True).stdout.strip()
+    assert out == "upcoming,today,in_progress,over"
+
+
+def test_page_uses_the_real_weekday_and_never_submits_the_filters():
+    app = (PROJECT_ROOT / "web" / "app.js").read_text(encoding="utf-8")
+    assert "Vente du lundi" not in app and 'weekday: "long"' in app  # W3
+    assert 'addEventListener("submit"' in app and "preventDefault" in app  # W4

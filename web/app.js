@@ -41,6 +41,18 @@ function ageText(iso) {
   return `il y a ${Math.round(hours / 24)} jours`;
 }
 
+// The sale's state right now (the snapshot's own state is frozen at publish time, and
+// publish runs before the sale): Paris calendar date, sale under way from 08:00.
+function saleStateNow(sale, now) {
+  if (!sale || !sale.date) return sale ? sale.state : null;
+  const at = now || new Date();
+  const today = at.toLocaleDateString("en-CA", { timeZone: "Europe/Paris" });
+  const hour = Number(at.toLocaleString("en-GB", { timeZone: "Europe/Paris", hour: "2-digit", hour12: false }));
+  if (today < sale.date) return "upcoming";
+  if (today > sale.date) return "over";
+  return hour >= 8 ? "in_progress" : "today";
+}
+
 function banner(kind, text) {
   document.getElementById("banners").appendChild(el("p", `banner banner-${kind}`, text));
 }
@@ -58,8 +70,11 @@ function renderHeader(s) {
     line.textContent = "Aucune vente analysée pour le moment.";
     return;
   }
-  const date = s.sale.date ? parisDate(`${s.sale.date}T12:00:00Z`) : "date inconnue";
-  line.appendChild(el("span", null, `Vente du lundi ${date} – ${s.sale.room || "Beauvais"} `));
+  const date = s.sale.date
+    ? new Date(`${s.sale.date}T12:00:00Z`).toLocaleDateString("fr-FR",
+        { timeZone: "Europe/Paris", weekday: "long", day: "numeric", month: "long", year: "numeric" })
+    : "date inconnue";
+  line.appendChild(el("span", null, `Vente du ${date} – ${s.sale.room || "Beauvais"} `));
   if (s.sale.url) {
     const a = el("a", null, "voir la vente sur le site d'Alcopa");
     a.href = s.sale.url;
@@ -100,7 +115,7 @@ function renderBanners(s) {
   if (status === "blocked") banner("red", "La dernière collecte a été refusée par le site source. Les voitures affichées viennent de la dernière collecte réussie.");
   if (status === "failed") banner("red", "La dernière collecte a échoué. Les voitures affichées viennent de la dernière collecte réussie.");
   if (status === "no_sale") banner("yellow", "Aucune vente du lundi n'a été trouvée cette semaine pour l'instant.");
-  const state = s.sale && s.sale.state;
+  const state = saleStateNow(s.sale);
   if (state === "over") banner("yellow", "Cette vente est terminée. La prochaine analyse est prévue jeudi soir.");
   if (state === "in_progress") banner("yellow", "Vente en cours : certains lots sont peut-être déjà adjugés.");
 }
@@ -202,7 +217,11 @@ async function load() {
   }
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-  document.getElementById("filters").addEventListener("input", renderLists);
+if (typeof module !== "undefined") module.exports = { saleStateNow };  // for tests (Node)
+
+if (typeof document !== "undefined") document.addEventListener("DOMContentLoaded", () => {
+  const form = document.getElementById("filters");
+  form.addEventListener("submit", (event) => event.preventDefault());
+  form.addEventListener("input", renderLists);
   load();
 });

@@ -116,6 +116,8 @@ The site **https://auction-agent-mvp.vercel.app** shows this week's Monday sale 
 3. It then uploads a snapshot to the project's private Vercel Blob store, which the site reads.
 4. The database stays on your PC. Only the snapshot leaves it: specs, scores, reasons, CT summary, AI verdict and a link to each lot. No VIN, plate, comment or photo.
 
+**AI cost of the provisional ranking:** while a sale's data is still incomplete (often on Thursday), the provisional top 10 get AI verdicts too, so the page is never empty. When the prices or CT reports appear (often by Saturday), those verdicts are redone. That adds roughly 10–30 reviews a week, a fraction of a cent at the `gpt-6-luna` prices given above (prices unverified).
+
 **Why your PC and not the cloud:** on 2026-11-06, Alcopa's firewall refused GitHub's cloud servers at the very first request (HTTP 405 on robots.txt). The crawler stops whenever it is blocked or challenged, and never tries to get around it: no proxies, no CAPTCHA solving, no disguised browser. If your own connection is refused too, stop and treat it as Alcopa saying no.
 
 ### One-time setup on Windows
