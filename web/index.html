@@ -6,13 +6,65 @@
 <meta name="robots" content="noindex, nofollow">
 <title>Auction Agent</title>
 <link rel="stylesheet" href="/styles.css">
+<script src="/app.js" defer></script>
 </head>
 <body>
-<main>
-  <h1>Auction Agent</h1>
-  <p class="lead">Les meilleures voitures de la vente Alcopa de Beauvais de la semaine, notées et classées.</p>
-  <p class="status">Mise en place en cours : la première analyse automatique n'a pas encore été publiée.</p>
-  <p class="small">Projet personnel, non commercial et sans lien avec Alcopa. Informations indicatives, pas un conseil d'achat.</p>
+<header class="top">
+  <div class="wrap">
+    <h1>Auction Agent</h1>
+    <p id="sale-line" class="sale-line">Chargement de l'analyse de la semaine…</p>
+  </div>
+</header>
+<main class="wrap">
+  <div id="banners"></div>
+
+  <section aria-labelledby="status-title" class="panel">
+    <h2 id="status-title">État de l'analyse</h2>
+    <dl id="status" class="status-grid"></dl>
+  </section>
+
+  <section aria-labelledby="filters-title" class="panel">
+    <h2 id="filters-title">Filtres</h2>
+    <form id="filters" class="filters" autocomplete="off">
+      <label>Budget max (€)
+        <input id="f-budget" type="number" inputmode="numeric" min="0" step="500" placeholder="sans limite">
+      </label>
+      <label>Carburant
+        <select id="f-fuel"><option value="">Tous</option></select>
+      </label>
+      <label>Niveau
+        <select id="f-tier">
+          <option value="">Tous</option>
+          <option value="green">Profil favorable</option>
+          <option value="yellow">Profil correct</option>
+        </select>
+      </label>
+      <label>Trier par
+        <select id="f-sort">
+          <option value="score">Note</option>
+          <option value="price">Prix estimé</option>
+        </select>
+      </label>
+    </form>
+  </section>
+
+  <section aria-labelledby="top-title">
+    <h2 id="top-title">Les meilleures affaires de la semaine</h2>
+    <p id="top-note" class="note" hidden></p>
+    <div id="top" class="cards"></div>
+  </section>
+
+  <section aria-labelledby="rest-title">
+    <h2 id="rest-title">Autres véhicules</h2>
+    <p id="rest-note" class="note"></p>
+    <div id="rest" class="cards"></div>
+  </section>
 </main>
+<footer class="wrap foot">
+  <p id="fees" class="small"></p>
+  <p class="small">Mises à jour prévues le jeudi soir et le samedi matin (heure de Paris).
+    Projet personnel, non commercial, sans lien avec Alcopa. Informations indicatives, pas un conseil d'achat.
+    <a href="/about.html">En savoir plus</a></p>
+</footer>
 </body>
 </html>

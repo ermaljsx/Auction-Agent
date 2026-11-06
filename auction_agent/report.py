@@ -96,15 +96,15 @@ def _card(row: sqlite3.Row, listing: Optional[sqlite3.Row], ct_json: Optional[st
     }
 
 
-def generate_report(
+def build_report_context(
     conn: sqlite3.Connection,
     settings: Settings,
     *,
     sale_id: Optional[int] = None,
     max_price: Optional[float] = None,
-    output_path: Optional[Path] = None,
     now: Optional[datetime] = None,
-) -> Path:
+) -> dict[str, Any]:
+    """Everything the report shows, as plain data (the HTML report and the web snapshot share it)."""
     now_dt = now or utc_now()
     listings = best_listings(conn, utc_iso(now_dt))
     upcoming = upcoming_vehicle_ids(conn, now_dt, settings)
@@ -141,16 +141,41 @@ def generate_report(
         (tier, TIER_LABELS[tier], [c for c in cards if c["tier"] == tier and c["id"] not in top_ids])
         for tier in ("green", "yellow", "red")
     ]
+    return {
+        "now": now_dt,
+        "sale_id": sale_id,
+        "cards": cards,
+        "upcoming": upcoming,
+        "top": top,
+        "sections": sections,
+        "counts": {t: sum(1 for c in cards if c["tier"] == t) for t in ("green", "yellow", "red")},
+        "partial": sum(1 for c in cards if c["confidence"] == "partial"),
+        "max_price": max_price,
+        "notes": notes,
+    }
+
+
+def generate_report(
+    conn: sqlite3.Connection,
+    settings: Settings,
+    *,
+    sale_id: Optional[int] = None,
+    max_price: Optional[float] = None,
+    output_path: Optional[Path] = None,
+    now: Optional[datetime] = None,
+) -> Path:
+    ctx = build_report_context(conn, settings, sale_id=sale_id, max_price=max_price, now=now)
+    now_dt = ctx["now"]
     html = _env().get_template("report.html.j2").render(
         generated_at=now_dt.astimezone(PARIS).strftime("%d/%m/%Y %H:%M"),
-        total=len(cards),
-        counts={t: sum(1 for c in cards if c["tier"] == t) for t in ("green", "yellow", "red")},
-        partial=sum(1 for c in cards if c["confidence"] == "partial"),
-        top=top,
-        sections=sections,
+        total=len(ctx["cards"]),
+        counts=ctx["counts"],
+        partial=ctx["partial"],
+        top=ctx["top"],
+        sections=ctx["sections"],
         max_price=max_price,
         buyer=settings.buyer_profile,
-        notes=notes,
+        notes=ctx["notes"],
     )
     if output_path is None:
         settings.reports_dir.mkdir(parents=True, exist_ok=True)

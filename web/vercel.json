@@ -1,4 +1,7 @@
 {
+  "functions": {
+    "api/snapshot.py": { "maxDuration": 10 }
+  },
   "headers": [
     {
       "source": "/(.*)",

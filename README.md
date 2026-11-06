@@ -102,6 +102,57 @@ The first line of `score` says which model runs and where the key came from (`ke
 
 If the key, model or credits are wrong, scoring continues with the rules only and prints a message saying what to fix. `GEMINI_*` variables from earlier versions are no longer read.
 
+## Online MVP: this week's best cars, on a private site
+
+The site **https://auction-agent-mvp.vercel.app** shows this week's Monday sale at Alcopa Beauvais (passenger cars):
+- the best cars to choose, tiers, the reasons behind each score and the AI verdicts;
+- filters (budget, fuel, tier) and a status block proving when the data was collected and that the AI review ran.
+
+**Access:** it is protected by Vercel Authentication, so only you (signed in to Vercel) can open it. To show it to a tester, ask for a temporary share link.
+
+**How it updates:**
+1. Your Windows PC runs `python -m auction_agent publish` every **Thursday at 19:17** and **Saturday at 09:43**, through Task Scheduler. If the PC was off, the run starts as soon as it is back on.
+2. Each run finds this week's Monday sale on the Beauvais room page, crawls it politely, scores every car and asks the AI for verdicts.
+3. It then uploads a snapshot to the project's private Vercel Blob store, which the site reads.
+4. The database stays on your PC. Only the snapshot leaves it: specs, scores, reasons, CT summary, AI verdict and a link to each lot. No VIN, plate, comment or photo.
+
+**Why your PC and not the cloud:** on 2026-11-06, Alcopa's firewall refused GitHub's cloud servers at the very first request (HTTP 405 on robots.txt). The crawler stops whenever it is blocked or challenged, and never tries to get around it: no proxies, no CAPTCHA solving, no disguised browser. If your own connection is refused too, stop and treat it as Alcopa saying no.
+
+### One-time setup on Windows
+1. **Update the code:** run `git pull`, then `pip install -r requirements.txt` in your virtual environment.
+2. **Check access from your connection** (2–4 polite requests):
+   ```bat
+   python -m auction_agent recon
+   ```
+   - It prints the robots.txt verdicts and `chosen: <sale id> on <date>`.
+   - If it prints `blocked or challenged`, stop here.
+   - If it prints `chosen: none` (the room page layout differs from what the code expects), send me the output, or pass the sale link yourself with `--url /salle-de-vente-encheres/beauvais/<id>`.
+3. **Fill in `.env`:**
+   - `OPENAI_API_KEY` (see "Optional: OpenAI review" above);
+   - `BLOB_READ_WRITE_TOKEN`, from Vercel → Storage → `auction-agent-state` (it starts with `vercel_blob_rw_`).
+4. **First run, by hand:**
+   ```bat
+   python -m auction_agent publish
+   ```
+   It takes about 15–90 minutes for a full sale (polite pace).
+
+   | Exit code | Meaning |
+   |---|---|
+   | 0 | ok |
+   | 2 | blocked, failed or upload refused |
+   | 3 | no Monday sale found this week |
+   | 4 | the sale is live but nothing could be put forward, or the AI review did not run |
+
+   To see the snapshot without uploading it: `python -m auction_agent publish --out data\snapshot-test`.
+5. **Schedule it:**
+   ```bat
+   powershell -NoProfile -ExecutionPolicy Bypass -File scripts\windows\install_task.ps1
+   ```
+   - Test it with `Start-ScheduledTask -TaskName "Auction Agent weekly crawl"`.
+   - Each run writes a log to `data\logs\`.
+   - The task runs while you are logged in, at the PC's local time, so keep Windows on Paris time.
+6. **Open the site.** A red banner appears if the data is more than 8 days old (for example, if the PC stayed off), or if the last collection was refused.
+
 ## Configuration (environment variables)
 
 Every variable can also go in the `.env` file (one `NAME=value` per line).
@@ -127,6 +178,7 @@ Every variable can also go in the `.env` file (one `NAME=value` per line).
 | `LLM_REASONING_EFFORT` | `none` | `none`, `minimal`, `low`, `medium`, `high`, `xhigh` or `max` (anything above `none` costs more), or `off` for a model without reasoning |
 | `LLM_LIMIT` | `60` | Maximum vehicles sent to the AI per run |
 | `AUCTION_AGENT_ENV_FILE` | `.env` | Settings file read at start-up (values already in the environment win) |
+| `BLOB_READ_WRITE_TOKEN` | unset | Lets `publish` upload the weekly snapshot to the site's private Vercel Blob store |
 
 ## Architecture
 
@@ -149,7 +201,11 @@ auction_agent/
 │   ├── llm.py         # optional OpenAI review (openai SDK, strict JSON schema)
 │   └── service.py     # rebuild assessments, LLM cache
 ├── report.py + templates/report.html.j2
+├── snapshot.py        # the weekly JSON the site shows (whitelisted fields only)
+├── blobstore.py       # upload to the private Vercel Blob store (or a local folder)
 └── cli.py             # python -m auction_agent …
+web/                   # the private site on Vercel: static page + api/snapshot.py (stdlib only)
+scripts/windows/       # Task Scheduler: run_publish.ps1 and install_task.ps1
 ```
 
 **Adding an auction house** means adding one module in `auction_agent/adapters/` that subclasses `AuctionAdapter` (it registers itself), plus HTML fixtures under `tests/fixtures/<slug>/`. Scoring and storage need no changes.

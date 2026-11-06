@@ -7,10 +7,12 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import re
 import shutil
 import sys
 import webbrowser
+from datetime import datetime
 from pathlib import Path
 from typing import Optional, Sequence
 from urllib.parse import urljoin, urlsplit
@@ -21,7 +23,8 @@ from rich.markup import escape
 from . import db
 from .adapters import get_adapter_class
 from .adapters.alcopa import BASE_URL as ALCOPA_BASE_URL, WEEKLY_SALE_QUERY
-from .config import DEFAULT_SALE_URL, PROJECT_DIR, EnvFileReport, Settings, load_env_file
+from .adapters._parsing import PARIS
+from .config import DEFAULT_SALE_URL, PROJECT_DIR, EnvFileReport, Settings, load_env_file, utc_iso, utc_now
 from .http_client import FetchError, PoliteClient
 from .documents import sweep_quarantine
 from .ingest import CrawlOptions, run_crawl
@@ -62,12 +65,12 @@ def _print_resolution(diag: dict) -> None:
                   markup=False, highlight=False)
 
 
-def resolve_sale_url(adapter, url: str) -> Optional[str]:
+def resolve_sale_url(adapter, url: str, today=None) -> Optional[str]:
     """A room URL becomes this week's sale URL (None if none was found); others pass through."""
     room = adapter.room_from_url(url) if hasattr(adapter, "room_from_url") else None
     if room is None:
         return url
-    sale, diag = adapter.resolve_next_sale(room)
+    sale, diag = adapter.resolve_next_sale(room, today=today)
     _print_resolution(diag)
     return sale.url if sale else None
 
@@ -112,6 +115,105 @@ def cmd_crawl(args: argparse.Namespace, settings: Settings) -> int:
             console.print(f"  [red]failed[/red] {escape(str(failure['external_id']))}: {escape(str(failure['error']))}",
                           highlight=False)
     return 0 if report.status in ("ok", "incomplete") else 2
+
+
+def _redact_urls(lines: list[str]) -> list[str]:
+    return list(dict.fromkeys(re.sub(r"https?://\S+", "<url>", line) for line in lines))
+
+
+def cmd_publish(args: argparse.Namespace, settings: Settings, now: Optional[datetime] = None) -> int:
+    """This week's run: find the sale, crawl it, score it, upload the snapshot for the site.
+
+    Exit codes: 0 ok · 2 blocked, failed or upload refused · 3 no sale found this week ·
+    4 the sale is live but nothing could be put forward, or the AI review did not run.
+    A snapshot is uploaded in every case except a failed upload, so the site always shows
+    what happened (the cars from the last good crawl stay visible after a blocked run).
+    """
+    from .blobstore import SNAPSHOT_PATH, LocalStore, StoreError, VercelBlobStore
+    from .http_client import BlockedError, RateLimitedError, RobotsDisallowedError
+    from .scoring.service import rescore_all
+    from .snapshot import build_snapshot
+
+    try:
+        store = LocalStore(Path(args.out)) if args.out else VercelBlobStore()
+    except StoreError as exc:
+        console.print(f"[red]{escape(str(exc))}[/red]", highlight=False)
+        return 2
+    say = (lambda msg: console.print(msg, markup=False, highlight=False))
+    clock = (lambda: now) if now is not None else utc_now  # tests pin the time
+    today = clock().astimezone(PARIS).date()
+    code = 0
+    sale_id = None
+    crawl: dict = {"status": "skipped" if args.no_crawl else "running", "started_at": utc_iso(clock())}
+    if not args.no_crawl:
+        adapter_cls = get_adapter_class(args.house)
+        with PoliteClient(settings) as http:
+            adapter = adapter_cls(http)
+            try:
+                sale_url = resolve_sale_url(adapter, urljoin(adapter_cls.base_url + "/", args.url), today=today)
+            except (BlockedError, RateLimitedError, RobotsDisallowedError) as exc:
+                sale_url, code = None, 2
+                crawl.update(status="blocked", reasons=_redact_urls([str(exc)]))
+            except FetchError as exc:
+                sale_url, code = None, 2
+                crawl.update(status="failed", reasons=_redact_urls([str(exc)]))
+            else:
+                if sale_url is None:
+                    code = 3
+                    crawl.update(status="no_sale", reasons=["no upcoming Monday sale found on the room page"])
+            if sale_url is not None:
+                report = run_crawl(settings, adapter, CrawlOptions(sale_url=sale_url), log=say,
+                                   now_fn=clock)
+                sale_id = report.sale_id
+                crawl.update(status=report.status, counts=dict(report.counts),
+                             failed=len(report.failures), reasons=_redact_urls(report.reasons))
+                if report.status not in ("ok", "incomplete"):
+                    code = 2
+    crawl["finished_at"] = utc_iso(clock())
+    use_llm = not args.no_llm
+    with db.open_db(settings.db_path) as conn:
+        if sale_id is None:  # blocked or no crawl: show the latest sale we know, as it was
+            row = conn.execute("SELECT id FROM sales ORDER BY starts_at DESC, id DESC LIMIT 1").fetchone()
+            sale_id = row["id"] if row else None
+        result = rescore_all(conn, settings, use_llm=use_llm, llm_limit=args.llm_limit, log=say,
+                             now=clock(), today=today)
+        llm = {
+            "enabled": use_llm and settings.llm_enabled,
+            "model": settings.llm_model,
+            "reasoning_effort": settings.llm_reasoning_effort,
+            "triggered": result["llm_triggered"],
+            "calls": result["llm_calls"],
+            "cached": result["llm_cached"],
+            "error": result.get("llm_error"),
+            "notes": _redact_urls(result.get("notes", [])),
+        }
+        snapshot = build_snapshot(conn, settings, sale_id=sale_id, crawl=crawl, llm=llm, now=clock())
+    data = json.dumps(snapshot, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    try:
+        store.put(SNAPSHOT_PATH, data, "application/json; charset=utf-8")
+    except StoreError as exc:
+        console.print(f"[red]{escape(str(exc))}[/red]", highlight=False)
+        return 2
+    sale = snapshot["sale"] or {}
+    say(f"Snapshot uploaded to {store.where}: sale {sale.get('external_id')} on {sale.get('date')} "
+        f"({sale.get('state', 'none')}), {len(snapshot['top'])} top pick(s)"
+        f"{' (provisional)' if snapshot['provisional'] else ''}, {len(snapshot['cards'])} more listed; "
+        f"crawl {crawl['status']}; AI calls {llm['calls']}, cached {llm['cached']}.")
+    if code == 0 and sale.get("state") in ("upcoming", "today"):
+        problems = []
+        if not snapshot["top"]:
+            problems.append("no car could be put forward")
+        if use_llm and not llm["enabled"]:
+            problems.append("AI review is off: set OPENAI_API_KEY in .env")
+        elif use_llm and llm["error"]:
+            problems.append(f"AI review stopped ({llm['error']} error, see notes)")
+        elif use_llm and snapshot["top"] and llm["calls"] + llm["cached"] == 0:
+            problems.append("no AI review was made")
+        for problem in problems:
+            console.print(f"  [yellow]attention[/yellow] {escape(problem)}", highlight=False)
+        if problems:
+            code = 4
+    return code
 
 
 def cmd_recon(args: argparse.Namespace, settings: Settings) -> int:
@@ -286,6 +388,16 @@ def build_parser() -> argparse.ArgumentParser:
     crawl.add_argument("--force-unlock", action="store_true", help="Release a stuck crawl lock first")
     crawl.add_argument("--quiet", action="store_true", help="Counts only, no per-vehicle lines (public logs)")
     crawl.set_defaults(func=cmd_crawl)
+
+    publish = sub.add_parser("publish", help="This week's run: crawl, score and upload the snapshot for the site")
+    publish.add_argument("--house", default="alcopa", help="Auction house adapter (default: alcopa)")
+    publish.add_argument("--url", default=DEFAULT_SALE_URL,
+                         help="Room URL (this week's sale is found there) or one sale URL (default: Beauvais)")
+    publish.add_argument("--no-crawl", action="store_true", help="Skip the crawl: rescore and publish what is stored")
+    publish.add_argument("--no-llm", action="store_true", help="Heuristic scoring only")
+    publish.add_argument("--llm-limit", type=int, default=None, help="Maximum vehicles sent to the LLM this run")
+    publish.add_argument("--out", help="Write the snapshot to this folder instead of uploading it (dry run)")
+    publish.set_defaults(func=cmd_publish)
 
     recon = sub.add_parser("recon", help="Check robots.txt and find this week's sale (2-4 requests)")
     recon.add_argument("--house", default="alcopa", help="Auction house adapter (default: alcopa)")

@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from datetime import date, datetime, timedelta
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Iterable, Optional
 
 from .. import db
 from ..adapters import get_adapter_class
@@ -37,6 +37,25 @@ from .llm import (
 # A payload the LLM failed on twice is not sent again until its data, the model or the
 # prompt version changes (each of those changes the payload hash).
 MAX_LLM_FAILURES = 2
+
+
+def pick_key(score: Any, price: Any) -> tuple:
+    """Best score first; on a tie, the cheaper car first and unknown prices last."""
+    return (-(score or 0), price is None, price or 0)
+
+
+def pick_ids(rows: Iterable[tuple[int, dict[str, Any]]], upcoming: set[int], n: int) -> list[int]:
+    """The cars to put forward this week, best first (the same list the web page shows).
+
+    Non-red cars of a live sale with complete data come first. While no car is complete
+    yet (prices are often published late in the week), the best non-red cars are put
+    forward provisionally instead, so the page is never empty and still gets AI verdicts.
+    """
+    live = [(vid, r) for vid, r in rows if vid in upcoming and r["tier"] != "red"]
+    full = [x for x in live if x[1]["confidence"] == "full"]
+    pool = full or live
+    pool.sort(key=lambda x: pick_key(x[1]["final_score"], x[1].get("effective_price")))
+    return [vid for vid, _ in pool[:n]]
 
 
 def _fee_models() -> Callable[[str], Callable[..., float]]:
@@ -200,13 +219,9 @@ def rescore_all(
             failures[(row[0], row[1])] = row[2]
     model_name = (client.model if client is not None else settings.llm_model) or "none"
 
-    eligible = sorted(
-        (p for p in partials if results[p.facts.vehicle_id]["tier"] != "red"
-         and results[p.facts.vehicle_id]["confidence"] == "full"
-         and p.facts.vehicle_id in upcoming),
-        key=lambda p: -results[p.facts.vehicle_id]["final_score"],
-    )
-    top_ids = {p.facts.vehicle_id for p in eligible[: settings.top_n]}
+    top_ids = set(pick_ids(
+        ((p.facts.vehicle_id, results[p.facts.vehicle_id]) for p in partials), upcoming, settings.top_n
+    ))
     triggered: list[tuple[Partial, str, dict[str, Any], str]] = []
     for part in partials:
         res = results[part.facts.vehicle_id]
@@ -223,6 +238,7 @@ def rescore_all(
             triggered.append((part, kind, payload, payload_hash(payload, model_name)))
 
     llm_calls = llm_cached = 0
+    llm_error: Optional[str] = None  # "config" or "transient": why the LLM stopped this run
     pending = [t for t in triggered if (t[0].facts.vehicle_id, t[3]) not in cache]
     llm_cached = len(triggered) - len(pending)
     # Failures are counted per payload *and* request settings: changing the model or the
@@ -245,6 +261,7 @@ def rescore_all(
                                       reasoning_effort=settings.llm_reasoning_effort)
             except LLMConfigError as exc:
                 notes.append(str(exc))
+                llm_error = "config"
         elif client is None:
             notes.append(f"LLM review skipped for {len(pending)} vehicle(s): set OPENAI_API_KEY "
                          "(copy .env.example to .env and paste your key).")
@@ -276,6 +293,7 @@ def rescore_all(
                     batch = client.review([t[2] for t in chunk])
                 except LLMConfigError as exc:
                     notes.append(str(exc))
+                    llm_error = "config"
                     break
                 except LLMBatchError as exc:
                     llm_calls += 1
@@ -286,9 +304,11 @@ def rescore_all(
                     continue
                 except LLMTransientError as exc:
                     notes.append(f"LLM temporarily unavailable: {exc}")
+                    llm_error = "transient"
                     break
                 except Exception as exc:  # never let the LLM prevent the heuristic rebuild
                     notes.append(f"LLM unavailable ({exc.__class__.__name__}): {exc}")
+                    llm_error = "transient"
                     break
                 llm_calls += 1
                 reasoning_tokens += getattr(batch, "tokens_reasoning", None) or 0
@@ -368,5 +388,6 @@ def rescore_all(
         "llm_triggered": len(triggered),
         "llm_calls": llm_calls,
         "llm_cached": llm_cached,
+        "llm_error": llm_error,
         "notes": notes,
     }
