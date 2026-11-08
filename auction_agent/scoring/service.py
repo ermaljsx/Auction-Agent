@@ -55,6 +55,8 @@ MAX_BATCH_CHARS = 150_000
 MAX_DEFECTS = 40  # every CT defect in practice (24 at most on the 2026-11 sale)
 MAX_DAMAGES = 30
 MAX_COMMENT_CHARS = 1000
+# What a price the estimate starts from can be (see _price_basis).
+PRICE_BASES = ("start", "bid", "shown")
 
 
 def pick_key(score: Any, price: Any) -> tuple:
@@ -142,8 +144,8 @@ def _detail(part: Partial, result: dict[str, Any]) -> dict[str, Any]:
     if f.battery_soh_pct is not None or leased:
         battery = {"soh": f.battery_soh_pct, "source": f.battery_soh_source, "leased": leased}
     price = result.get("price_parts")
-    if price is not None:  # "start" is the opening price or, with basis "bid", the running bid
-        price = {**price, "basis": "bid" if f.price_basis == "bid" else "start"}
+    if price is not None:  # "start" is the price the estimate starts from; "basis" says which one
+        price = {**price, "basis": f.price_basis if f.price_basis in PRICE_BASES else "start"}
     return {
         "price": price,
         "ct_doc": f.ct_doc,
@@ -193,12 +195,21 @@ def _price(row: Optional[sqlite3.Row]) -> Optional[float]:
 
 
 def _price_basis(row: Optional[sqlite3.Row]) -> Optional[str]:
-    """Which listing value ``_price`` is: "start" (the opening price) or "bid" (a running bid
-    above it, or shown alone, as the cards' "Enchère courante")."""
+    """Which listing value ``_price`` is (see PRICE_BASES):
+
+    - "start": the opening price (mise à prix);
+    - "bid": a running bid, i.e. a current price above a known opening price;
+    - "shown": a price shown without an opening price. ``data-current-price`` is the opening
+      price until someone bids (adapters/alcopa.py), so it is most likely the opening price,
+      but it cannot be told from a bid.
+    """
     price = _price(row)
     if price is None:
         return None
-    return "start" if row["starting_price"] and row["starting_price"] >= price else "bid"  # type: ignore[index]
+    start = row["starting_price"]  # type: ignore[index]
+    if not start:
+        return "shown"
+    return "bid" if price > start else "start"
 
 
 def _ct_inputs(vehicle: sqlite3.Row, doc: Optional[sqlite3.Row]) -> tuple[Optional[dict], Optional[str]]:

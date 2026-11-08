@@ -315,7 +315,7 @@ def test_warranty_reason_text(settings, stored, text):
 
 
 def test_heuristic_version_is_bumped():
-    assert HEURISTIC_VERSION == "h1-2026.11"
+    assert HEURISTIC_VERSION == "h1-2026.11b"
 
 
 # ------------------------------------------------------------------ comments: negation within one clause

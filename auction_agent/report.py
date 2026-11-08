@@ -75,9 +75,36 @@ def _plural(n: int, one: str, many: str) -> str:
     return f"{n} {one if n == 1 else many}"
 
 
+def _ct_summary(ct: dict[str, Any]) -> Optional[str]:
+    """"favorable, 2 défaillances mineures", "défavorable, 6 défaillances majeures"; None when
+    the result was not read."""
+    counts = ct.get("counts") or {}
+    result = ct.get("result")
+    if result == "FAVORABLE":
+        minor = int(counts.get("minor") or 0)
+        return f"favorable, {_plural(minor, 'défaillance mineure', 'défaillances mineures')}" if minor \
+            else "favorable, sans défaillance"
+    if result in ("DEFAVORABLE_MAJEURE", "DEFAVORABLE_CRITIQUE"):
+        serious = " et ".join(_plural(n, one, many) for n, one, many in (
+            (int(counts.get("critical") or 0), "défaillance critique", "défaillances critiques"),
+            (int(counts.get("major") or 0), "défaillance majeure", "défaillances majeures")) if n)
+        return f"défavorable, {serious}" if serious else "défavorable"
+    return None
+
+
 def ct_line(ct: Optional[dict[str, Any]], reasons: list[dict[str, Any]]) -> str:
-    """One line on the CT for a list row, consistent with how the score read it."""
+    """One line on the CT for a list row, consistent with how the score read it.
+
+    A car under 4 years old needs no CT yet, but when one was published and parsed the line
+    says what it found (BRIEF v2, B2): « pas encore exigé » alone contradicted a failed CT.
+    """
     codes = {r.get("code") for r in reasons}
+    if ct and codes & {"ct_young_failed", "ct_not_required"}:
+        what = "CT volontaire" if ct.get("nature") == "volontaire" else "CT"
+        summary = _ct_summary(ct)
+        if summary is None:
+            return f"{what} : résultat non lu (pas encore exigé)"
+        return f"{what} {summary} (pas encore exigé)"
     if "ct_not_required" in codes:
         return "CT pas encore exigé (moins de 4 ans)"
     if "ct_absent" in codes:
@@ -118,7 +145,8 @@ def _card(row: sqlite3.Row, listing: Optional[sqlite3.Row], ct_json: Optional[st
     except ValueError:
         detail_raw = None
     all_reasons = [{"text": r["text"], "src": SRC_FR.get(r["evidence"]["src"], r["evidence"]["src"]),
-                    "pillar": r["pillar"], "delta": r["delta"], "code": r.get("code")} for r in reasons]
+                    "pillar": r["pillar"], "delta": r["delta"], "code": r.get("code"),
+                    "ref": (r.get("evidence") or {}).get("ref"), "params": r.get("params")} for r in reasons]
     sale_date = None
     if listing is not None and listing["starts_at"]:
         sale_date = parse_utc_iso(listing["starts_at"]).astimezone(PARIS).strftime("%d/%m/%Y")  # type: ignore[union-attr]
@@ -148,7 +176,7 @@ def _card(row: sqlite3.Row, listing: Optional[sqlite3.Row], ct_json: Optional[st
         "ct_counts": ct.get("counts") if ct else None,
         # Gates are listed once, under "gates" (they used to be repeated here too).
         "reasons": [
-            {"text": r["text"], "src": r["src"], "delta": r["delta"]}
+            {"text": r["text"], "src": r["src"], "delta": r["delta"], "code": r["code"], "params": r["params"]}
             for r in all_reasons if r["pillar"] != "gate" and (r["delta"] != 0 or r["pillar"] == "llm")
         ][:3],
         "all_reasons": all_reasons,

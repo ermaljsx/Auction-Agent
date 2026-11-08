@@ -9,7 +9,7 @@ import pytest
 
 from auction_agent import cli, db
 from auction_agent.blobstore import SNAPSHOT_PATH, LocalStore, StoreError, VercelBlobStore
-from auction_agent.snapshot import build_snapshot, sale_state
+from auction_agent.snapshot import PARTIAL_FR, build_snapshot, sale_state
 from tests.conftest import PROJECT_ROOT, read_fixture
 from tests.fakes import FakeHttp
 from tests.test_ingest import IDS, PDF, detail_html
@@ -478,7 +478,8 @@ def test_page_uses_the_real_weekday_and_never_submits_the_filters():
 V1_CARD_FIELDS = {"title", "trim", "year", "mileage", "fuel", "gearbox", "tier", "tier_label", "score", "pillars",
                   "confidence", "effective_price", "starting_price", "sale_date", "lot", "ct", "ct_counts", "verdict",
                   "url", "reasons", "gates"}
-DETAIL_KEYS = {"score", "value", "incomplete", "price", "ct", "ct_doc", "damages", "battery", "reasons"}
+DETAIL_KEYS = {"score", "value", "incomplete", "incomplete_keys", "price", "ct", "ct_doc", "damages", "battery",
+               "reasons"}
 BLOCKED_KEYS = {"id", "vehicle_id", "vin_hmac", "comments", "photo_count", "first_registration", "storage_location",
                 "raw_specs_json", "detail_url", "detail_raw", "ct_raw", "all_reasons", "flags"}
 
@@ -512,9 +513,13 @@ def test_snapshot_v2_detail(settings, tmp_path):
     assert snap["schema"] == 2 and snap["top"]
     assert snap["scoring"] == {"weights": {"Fiabilité": 35, "État": 35, "Prix": 30},
                                "green_min": settings.green_min, "yellow_min": settings.yellow_min}
-    assert "TVA si elle n'est pas récupérable" in snap["fees_note"] and "CT à refaire" in snap["fees_note"]
+    note = snap["fees_note"]
+    assert note.startswith("Coût estimé = ") and "tout compris" not in note.lower()
+    assert "TVA quand un particulier ne peut pas la récupérer" in note and "CT à refaire" in note
+    assert "Non compris : frais fixes par lot, transport, carte grise." in note
     for c in snap["top"] + snap["cards"]:
         assert V1_CARD_FIELDS <= set(c)  # schema 1 fields are all kept
+        assert c["gate_codes"] == [] and c["gates"] == []
         assert c["subtitle"] == "1.5 HYBRIDE 116H" and c["ct_result"] == "FAVORABLE"
         assert c["ct_line"] == "CT favorable, 2 défaillances mineures"
         d = c["detail"]
@@ -522,7 +527,8 @@ def test_snapshot_v2_detail(settings, tmp_path):
         p = d["price"]
         parts = p["start"] + p["vat"] + p["fees"] + p["repairs"] + p["ct_redo"]
         assert abs(parts - p["total"]) < 0.02 and abs(p["total"] - c["effective_price"]) < 0.02
-        assert p["start"] == c["starting_price"]
+        assert p["start"] == c["starting_price"] and p["basis"] == "start"
+        assert p["fee_rate"] == 0.0 and p["fees"] == 0.0  # the seeded sale is online: no buyer's fee
         ct = d["ct"]
         assert ct["result"] == "FAVORABLE" and ct["nature"] == "périodique" and ct["date"] == "2026-10-01"
         assert ct["km"] == 98765 and ct["valid_until"] == "2028-03-11" and ct["more"] == 0
@@ -533,16 +539,21 @@ def test_snapshot_v2_detail(settings, tmp_path):
         assert d["ct_doc"] == "parsed" and d["damages"] is None and d["battery"] is None
         assert {r["text"] for r in c["reasons"]} <= {r["text"] for r in d["reasons"]}
         assert all(r["pillar"] in ("Fiabilité", "État", "Prix", "IA") for r in d["reasons"])
+        assert all(isinstance(r["code"], str) and r["code"] for r in d["reasons"])
+        assert {"ct_favorable", "value"} <= {r["code"] for r in d["reasons"]}
+        assert set(d["incomplete_keys"]) <= set(PARTIAL_FR)
+        assert d["incomplete"] == [PARTIAL_FR[k] for k in d["incomplete_keys"]]
         assert d["value"]["known"] is True and "médiane de" in d["value"]["text"]
         assert d["score"]["before_cap"] >= c["score"]
     assert set(snap["counts"]["compact"]) == {"green", "yellow", "red"} and "partial_why" in snap["counts"]
 
 
-def test_a_running_bid_is_published_as_a_bid_not_as_the_opening_price(settings, tmp_path):
-    """The price is the higher of the opening price and the card's "Enchère courante": the
-    price table must say which one it starts from."""
+def test_only_a_price_above_a_known_opening_price_is_published_as_a_bid(settings, tmp_path):
+    """The price is the higher of the opening price and ``data-current-price``, which is the
+    opening price until someone bids. The price table must say which one it starts from: a
+    price shown without an opening price may be the opening price itself, so it is "shown"."""
     def bids(conn):
-        # Car 1: a running bid and no opening price; car 2: a bid above its opening price.
+        # Car 1: a price shown and no opening price; car 2: a bid above its opening price.
         conn.execute("UPDATE listings SET current_price_attr = 10700, starting_price = NULL WHERE vehicle_id = 1")
         conn.execute("UPDATE listings SET current_price_attr = starting_price + 300 WHERE vehicle_id = 2")
         conn.execute("UPDATE listings SET current_price_attr = starting_price - 300 WHERE vehicle_id = 3")
@@ -551,7 +562,7 @@ def test_a_running_bid_is_published_as_a_bid_not_as_the_opening_price(settings, 
     by_km = {c["mileage"]: c for c in snap["top"] + snap["cards"]}
     first, second, third = by_km[60_000], by_km[61_000], by_km[62_000]
     assert first["starting_price"] is None
-    assert first["detail"]["price"]["start"] == 10_700 and first["detail"]["price"]["basis"] == "bid"
+    assert first["detail"]["price"]["start"] == 10_700 and first["detail"]["price"]["basis"] == "shown"
     assert second["detail"]["price"]["start"] == second["starting_price"] + 300
     assert second["detail"]["price"]["basis"] == "bid"
     assert third["detail"]["price"]["start"] == third["starting_price"]
@@ -564,10 +575,12 @@ def test_gate_text_is_shown_once(settings, tmp_path):
     cars = snap["top"] + snap["cards"]
     assert cars
     for c in cars:
-        assert c["gates"] == ["Kilométrage non garanti"]
+        assert c["gates"] == ["Kilométrage non garanti"] and c["gate_codes"] == ["mileage_not_guaranteed"]
         assert "Kilométrage non garanti" not in {r["text"] for r in c["reasons"]}
         assert "Kilométrage non garanti" not in {r["text"] for r in c["detail"]["reasons"]}
         assert "kilométrage non garanti" in c["detail"]["incomplete"]
+        assert "mileage_not_guaranteed" in c["detail"]["incomplete_keys"]
+        assert c["detail"]["incomplete"] == [PARTIAL_FR[k] for k in c["detail"]["incomplete_keys"]]
     assert snap["counts"]["partial_why"]["mileage_not_guaranteed"] == len(cars)
 
 
@@ -581,9 +594,11 @@ def test_compact_lists_every_other_lot(settings, site, tmp_path):
     assert snap["counts"]["compact"] == {"green": 0, "yellow": 0, "red": 3}
     lots = [c["lot"] for c in snap["compact"]]
     assert lots == sorted(lots, key=lambda lot: (lot is None, lot or 0))  # by lot number, unnumbered last
+    v1 = {"lot", "title", "year", "mileage", "fuel", "gearbox", "effective_price", "score", "tier", "ct_result", "why",
+          "url"}
+    v2 = {"title_display", "ct_grid", "ct_counts", "why_code", "why_params", "engine"}  # redesign v2 (B3), additive
     for c in snap["compact"]:
-        assert set(c) == {"lot", "title", "year", "mileage", "fuel", "gearbox", "effective_price", "score", "tier",
-                          "ct_result", "why", "url"}
+        assert v1 <= set(c) <= v1 | v2 and {"title_display", "ct_grid", "ct_counts"} <= set(c)
         assert c["tier"] == "red" and c["why"] and c["url"].startswith("https://www.alcopa-auction.fr/")
 
 

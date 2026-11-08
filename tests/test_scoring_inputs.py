@@ -85,4 +85,4 @@ def test_bare_warranty_badge_reads_as_a_mechanical_warranty(settings):
         text = {vid: next(r["text"] for r in reasons(conn, vid) if r["code"] == "warranty") for vid in (badge, label)}
         assert text == {badge: "Garantie mécanique incluse (formule non précisée)",
                         label: "Garantie Sérénité de 3 mois incluse"}
-        assert conn.execute("SELECT DISTINCT heuristic_version FROM assessments").fetchone()[0] == "h1-2026.11"
+        assert conn.execute("SELECT DISTINCT heuristic_version FROM assessments").fetchone()[0] == "h1-2026.11b"

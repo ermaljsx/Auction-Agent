@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="fr"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Auction France · Système Relevé</title>
+<style>
+@font-face{font-family:"Archivo";font-style:normal;font-display:block;font-weight:100 900;font-stretch:62% 125%;src:url(../fonts/archivo-latin-wdth-wght.woff2) format("woff2-variations"),url(../fonts/archivo-latin-wdth-wght.woff2) format("woff2")}
+@font-face{font-family:"JetBrains Mono";font-style:normal;font-display:block;font-weight:100 800;src:url(../fonts/jetbrains-mono-latin-wght.woff2) format("woff2-variations"),url(../fonts/jetbrains-mono-latin-wght.woff2) format("woff2")}
+</style>
+<style>
+body{margin:0;background:#F3F3F0}
+a{color:#121316}a:hover{color:#474A51}
+.fig{font-stretch:75%;font-variant-numeric:tabular-nums;font-weight:700}
+.mono{font-family:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace}
+.lbl{font-family:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase}
+.tag{display:inline-flex;align-items:center;justify-content:center;min-width:52px;height:30px;padding:0 8px;box-sizing:border-box;background:#FFD23F;color:#121316;border-radius:3px;font-stretch:75%;font-weight:800;font-size:19px;font-variant-numeric:tabular-nums}
+.fp{display:grid;grid-template-columns:repeat(3,8px);gap:2px;flex:none}
+.fc{width:8px;height:8px;border-radius:1px;box-sizing:border-box;border:1px solid #B5B8B1;background:#FFFFFF;display:inline-block}
+.fc-n{background:#C4C6C0;border-color:#8E9198}.fc-M{background:#E26A16;border-color:#E26A16}.fc-C{background:#7F1D1D;border-color:#7F1D1D}.fc-u{border-style:dashed;border-color:#8E9198;background:transparent}
+.ring{position:relative;flex:none;display:inline-block}.ring>svg{display:block;transform:rotate(-90deg)}.ring>.rn{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-stretch:75%;font-variant-numeric:tabular-nums;font-weight:800;color:#121316}
+.card{background:#FFFFFF;border:1px solid #DEDED8;border-radius:6px;padding:24px;box-sizing:border-box;display:flex;flex-direction:column;gap:16px;min-width:0}
+.sw{height:56px;border-radius:4px;box-sizing:border-box}
+.h{margin:0;font-size:20px;font-weight:750}
+.cap{font-size:12.5px;color:#474A51;line-height:1.4}
+</style>
+</head>
+<body>
+<div id="dc-root">
+
+<div style="min-height: 1900px; background: #F3F3F0; color: #121316; font-family: Archivo, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Arial, sans-serif; -webkit-font-smoothing: antialiased; padding: 56px 64px; box-sizing: border-box; display: flex; flex-direction: column; gap: 24px">
+
+  <header style="display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; flex-wrap: wrap; padding-bottom: 20px; border-bottom: 2px solid #121316">
+    <div>
+      <p class="lbl" style="margin: 0 0 10px; color: #474A51">Système de design · v2</p>
+      <h1 style="margin: 0; font-size: 52px; line-height: 0.95; font-weight: 800; font-stretch: 112%; letter-spacing: -0.02em">Relevé</h1>
+    </div>
+    <p style="margin: 0; max-width: 36em; font-size: 16px; line-height: 1.5; color: #474A51">Un relevé d’inspection mis en page comme un horaire de vente. Papier blanc, encre carbone, un surligneur jaune. La donnée fait le décor : la grille du contrôle technique remplace les photos.</p>
+  </header>
+
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+    <section class="card" aria-labelledby="t-id">
+      <h2 id="t-id" class="h">Identité</h2>
+      <div style="display: flex; gap: 12px; align-items: flex-end">
+        <div style="display: flex; gap: 14px; align-items: flex-end; padding: 16px; background: #FFFFFF; border: 1px solid #ECECE7; border-radius: 4px">
+          <svg width="16" height="16" viewBox="0 0 28 28" role="img" aria-label="Marque à 16 px"><rect width="28" height="28" rx="5" fill="#FFD23F"></rect><g fill="#121316"><rect x="6" y="6" width="4.5" height="4.5"></rect><rect x="11.75" y="6" width="4.5" height="4.5"></rect><rect x="17.5" y="6" width="4.5" height="4.5"></rect><rect x="6" y="11.75" width="4.5" height="4.5"></rect><rect x="17.5" y="11.75" width="4.5" height="4.5"></rect><rect x="6" y="17.5" width="4.5" height="4.5"></rect><rect x="11.75" y="17.5" width="4.5" height="4.5"></rect><rect x="17.5" y="17.5" width="4.5" height="4.5"></rect></g></svg>
+          <svg width="32" height="32" viewBox="0 0 28 28" role="img" aria-label="Marque à 32 px"><rect width="28" height="28" rx="5" fill="#FFD23F"></rect><g fill="#121316"><rect x="6" y="6" width="4.5" height="4.5" rx=".6"></rect><rect x="11.75" y="6" width="4.5" height="4.5" rx=".6"></rect><rect x="17.5" y="6" width="4.5" height="4.5" rx=".6"></rect><rect x="6" y="11.75" width="4.5" height="4.5" rx=".6"></rect><rect x="17.5" y="11.75" width="4.5" height="4.5" rx=".6"></rect><rect x="6" y="17.5" width="4.5" height="4.5" rx=".6"></rect><rect x="11.75" y="17.5" width="4.5" height="4.5" rx=".6"></rect><rect x="17.5" y="17.5" width="4.5" height="4.5" rx=".6"></rect></g><rect x="12.35" y="12.35" width="3.3" height="3.3" rx=".4" fill="none" stroke="#121316" stroke-width="1.2"></rect></svg>
+          <svg width="64" height="64" viewBox="0 0 28 28" role="img" aria-label="Marque à 64 px"><rect width="28" height="28" rx="5" fill="#FFD23F"></rect><g fill="#121316"><rect x="6" y="6" width="4.5" height="4.5" rx=".6"></rect><rect x="11.75" y="6" width="4.5" height="4.5" rx=".6"></rect><rect x="17.5" y="6" width="4.5" height="4.5" rx=".6"></rect><rect x="6" y="11.75" width="4.5" height="4.5" rx=".6"></rect><rect x="17.5" y="11.75" width="4.5" height="4.5" rx=".6"></rect><rect x="6" y="17.5" width="4.5" height="4.5" rx=".6"></rect><rect x="11.75" y="17.5" width="4.5" height="4.5" rx=".6"></rect><rect x="17.5" y="17.5" width="4.5" height="4.5" rx=".6"></rect></g><rect x="12.35" y="12.35" width="3.3" height="3.3" rx=".4" fill="none" stroke="#121316" stroke-width="1.2"></rect></svg>
+        </div>
+        <div style="display: flex; gap: 14px; align-items: flex-end; padding: 16px; background: #121316; border-radius: 4px">
+          <svg width="16" height="16" viewBox="0 0 28 28" aria-hidden="true"><rect width="28" height="28" rx="5" fill="#FFD23F"></rect><g fill="#121316"><rect x="6" y="6" width="4.5" height="4.5"></rect><rect x="11.75" y="6" width="4.5" height="4.5"></rect><rect x="17.5" y="6" width="4.5" height="4.5"></rect><rect x="6" y="11.75" width="4.5" height="4.5"></rect><rect x="17.5" y="11.75" width="4.5" height="4.5"></rect><rect x="6" y="17.5" width="4.5" height="4.5"></rect><rect x="11.75" y="17.5" width="4.5" height="4.5"></rect><rect x="17.5" y="17.5" width="4.5" height="4.5"></rect></g></svg>
+          <svg width="32" height="32" viewBox="0 0 28 28" aria-hidden="true"><rect width="28" height="28" rx="5" fill="#FFD23F"></rect><g fill="#121316"><rect x="6" y="6" width="4.5" height="4.5" rx=".6"></rect><rect x="11.75" y="6" width="4.5" height="4.5" rx=".6"></rect><rect x="17.5" y="6" width="4.5" height="4.5" rx=".6"></rect><rect x="6" y="11.75" width="4.5" height="4.5" rx=".6"></rect><rect x="17.5" y="11.75" width="4.5" height="4.5" rx=".6"></rect><rect x="6" y="17.5" width="4.5" height="4.5" rx=".6"></rect><rect x="11.75" y="17.5" width="4.5" height="4.5" rx=".6"></rect><rect x="17.5" y="17.5" width="4.5" height="4.5" rx=".6"></rect></g><rect x="12.35" y="12.35" width="3.3" height="3.3" rx=".4" fill="none" stroke="#121316" stroke-width="1.2"></rect></svg>
+        </div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 12px"><svg width="32" height="32" viewBox="0 0 28 28" aria-hidden="true"><rect width="28" height="28" rx="5" fill="#FFD23F"></rect><g fill="#121316"><rect x="6" y="6" width="4.5" height="4.5" rx=".6"></rect><rect x="11.75" y="6" width="4.5" height="4.5" rx=".6"></rect><rect x="17.5" y="6" width="4.5" height="4.5" rx=".6"></rect><rect x="6" y="11.75" width="4.5" height="4.5" rx=".6"></rect><rect x="17.5" y="11.75" width="4.5" height="4.5" rx=".6"></rect><rect x="6" y="17.5" width="4.5" height="4.5" rx=".6"></rect><rect x="11.75" y="17.5" width="4.5" height="4.5" rx=".6"></rect><rect x="17.5" y="17.5" width="4.5" height="4.5" rx=".6"></rect></g><rect x="12.35" y="12.35" width="3.3" height="3.3" rx=".4" fill="none" stroke="#121316" stroke-width="1.2"></rect></svg><span style="font-size: 24px; font-weight: 800; font-stretch: 112%; letter-spacing: -0.01em">Auction France</span></div>
+      <p class="cap" style="margin: 0">La grille : les neuf fonctions du contrôle technique, lues pour vous. Case centrale ouverte à partir de 32 px, pleine à 16 px. Pas de coche : la marque ne doit jamais suggérer «&nbsp;vérifié&nbsp;» ou «&nbsp;certifié&nbsp;». Nom de travail, à valider par le propriétaire.</p>
+    </section>
+
+    <section class="card" aria-labelledby="t-col" style="grid-column: span 2">
+      <h2 id="t-col" class="h">Couleurs</h2>
+      <div style="display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px">
+        
+          <div style="display: flex; flex-direction: column; gap: 6px"><div class="sw" style="background: #F3F3F0; border: 1px solid #DEDED8"></div><span style="font-size: 13px; font-weight: 650">Papier</span><span class="mono" style="font-size: 11px; color: #474A51">#F3F3F0</span><span class="cap">Fond de page</span></div>
+        
+          <div style="display: flex; flex-direction: column; gap: 6px"><div class="sw" style="background: #FFFFFF; border: 1px solid #DEDED8"></div><span style="font-size: 13px; font-weight: 650">Surface</span><span class="mono" style="font-size: 11px; color: #474A51">#FFFFFF</span><span class="cap">Lignes, fiche, champs</span></div>
+        
+          <div style="display: flex; flex-direction: column; gap: 6px"><div class="sw" style="background: #121316; border: 1px solid #DEDED8"></div><span style="font-size: 13px; font-weight: 650">Carbone</span><span class="mono" style="font-size: 11px; color: #474A51">#121316</span><span class="cap">Texte, bandeau, action principale</span></div>
+        
+          <div style="display: flex; flex-direction: column; gap: 6px"><div class="sw" style="background: #474A51; border: 1px solid #DEDED8"></div><span style="font-size: 13px; font-weight: 650">Encre 2</span><span class="mono" style="font-size: 11px; color: #474A51">#474A51</span><span class="cap">Texte secondaire</span></div>
+        
+          <div style="display: flex; flex-direction: column; gap: 6px"><div class="sw" style="background: #6A6E76; border: 1px solid #DEDED8"></div><span style="font-size: 13px; font-weight: 650">Encre 3</span><span class="mono" style="font-size: 11px; color: #474A51">#6A6E76</span><span class="cap">Légendes, 4,6:1 sur papier</span></div>
+        
+          <div style="display: flex; flex-direction: column; gap: 6px"><div class="sw" style="background: #DEDED8; border: 1px solid #DEDED8"></div><span style="font-size: 13px; font-weight: 650">Filet</span><span class="mono" style="font-size: 11px; color: #474A51">#DEDED8</span><span class="cap">Séparateurs</span></div>
+        
+          <div style="display: flex; flex-direction: column; gap: 6px"><div class="sw" style="background: #FFD23F; border: 1px solid #DEDED8"></div><span style="font-size: 13px; font-weight: 650">Surligneur</span><span class="mono" style="font-size: 11px; color: #474A51">#FFD23F</span><span class="cap">Lot, sélection, CTA sur carbone</span></div>
+        
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; padding-top: 8px; border-top: 1px solid #ECECE7">
+        
+          <div style="display: flex; flex-direction: column; gap: 6px"><div style="display: flex; gap: 4px"><div class="sw" style="flex: 1; height: 40px; background: #3CCB7F; border: 0"></div><div class="sw" style="flex: 1; height: 40px; background: #E4F2E9"></div></div><span style="font-size: 13px; font-weight: 650; color: #146C43">CT favorable</span><span class="mono" style="font-size: 11px; color: #474A51">texte #146C43 · plein #3CCB7F</span></div>
+        
+          <div style="display: flex; flex-direction: column; gap: 6px"><div style="display: flex; gap: 4px"><div class="sw" style="flex: 1; height: 40px; background: #C4C6C0; border: 1px solid #8E9198"></div><div class="sw" style="flex: 1; height: 40px; background: #F1F1EC"></div></div><span style="font-size: 13px; font-weight: 650; color: #474A51">Mineure</span><span class="mono" style="font-size: 11px; color: #474A51">texte #474A51 · plein #C4C6C0</span></div>
+        
+          <div style="display: flex; flex-direction: column; gap: 6px"><div style="display: flex; gap: 4px"><div class="sw" style="flex: 1; height: 40px; background: #E26A16; border: 0"></div><div class="sw" style="flex: 1; height: 40px; background: #FDEBDD"></div></div><span style="font-size: 13px; font-weight: 650; color: #B4470B">Majeure</span><span class="mono" style="font-size: 11px; color: #474A51">texte #B4470B · plein #E26A16</span></div>
+        
+          <div style="display: flex; flex-direction: column; gap: 6px"><div style="display: flex; gap: 4px"><div class="sw" style="flex: 1; height: 40px; background: #7F1D1D; border: 0"></div><div class="sw" style="flex: 1; height: 40px; background: #FBE3E3"></div></div><span style="font-size: 13px; font-weight: 650; color: #A3161F">Critique</span><span class="mono" style="font-size: 11px; color: #474A51">texte #A3161F · plein #7F1D1D</span></div>
+        
+          <div style="display: flex; flex-direction: column; gap: 6px"><div style="display: flex; gap: 4px"><div class="sw" style="flex: 1; height: 40px; background: transparent; border: 1px dashed #8E9198"></div><div class="sw" style="flex: 1; height: 40px; background: #F7F7F4"></div></div><span style="font-size: 13px; font-weight: 650; color: #474A51">Absent</span><span class="mono" style="font-size: 11px; color: #474A51">texte #474A51 · plein transparent</span></div>
+        
+      </div>
+      <div style="display: flex; gap: 10px; align-items: center; padding: 14px; background: #121316; border-radius: 4px; flex-wrap: wrap">
+        <span class="lbl" style="color: #B9BBC2; margin-right: 8px">Sombre</span>
+        
+          <span style="display: inline-flex; align-items: center; gap: 6px; color: #ECECE7; font-size: 12px"><span style="width: 22px; height: 22px; border-radius: 3px; background: #101113; border: 1px solid #3A3D44"></span><span class="mono">papier #101113</span></span>
+        
+          <span style="display: inline-flex; align-items: center; gap: 6px; color: #ECECE7; font-size: 12px"><span style="width: 22px; height: 22px; border-radius: 3px; background: #18191C; border: 1px solid #3A3D44"></span><span class="mono">surface #18191C</span></span>
+        
+          <span style="display: inline-flex; align-items: center; gap: 6px; color: #ECECE7; font-size: 12px"><span style="width: 22px; height: 22px; border-radius: 3px; background: #F1F1EC; border: 1px solid #3A3D44"></span><span class="mono">encre #F1F1EC</span></span>
+        
+          <span style="display: inline-flex; align-items: center; gap: 6px; color: #ECECE7; font-size: 12px"><span style="width: 22px; height: 22px; border-radius: 3px; background: #B9BBC2; border: 1px solid #3A3D44"></span><span class="mono">encre 2 #B9BBC2</span></span>
+        
+          <span style="display: inline-flex; align-items: center; gap: 6px; color: #ECECE7; font-size: 12px"><span style="width: 22px; height: 22px; border-radius: 3px; background: #6FD39A; border: 1px solid #3A3D44"></span><span class="mono">favorable #6FD39A</span></span>
+        
+          <span style="display: inline-flex; align-items: center; gap: 6px; color: #ECECE7; font-size: 12px"><span style="width: 22px; height: 22px; border-radius: 3px; background: #FF9A57; border: 1px solid #3A3D44"></span><span class="mono">majeure #FF9A57</span></span>
+        
+          <span style="display: inline-flex; align-items: center; gap: 6px; color: #ECECE7; font-size: 12px"><span style="width: 22px; height: 22px; border-radius: 3px; background: #FF8A8A; border: 1px solid #3A3D44"></span><span class="mono">critique #FF8A8A</span></span>
+        
+          <span style="display: inline-flex; align-items: center; gap: 6px; color: #ECECE7; font-size: 12px"><span style="width: 22px; height: 22px; border-radius: 3px; background: #FFD23F; border: 1px solid #3A3D44"></span><span class="mono">surligneur #FFD23F</span></span>
+        
+      </div>
+      <p class="cap" style="margin: 0">Le jaune ne porte jamais d’information : il marque les numéros de lot, la sélection et l’action principale sur fond carbone. Les états du CT se distinguent par la clarté, pas seulement par la teinte : RAS blanc, mineure gris clair, majeure orange, critique bordeaux presque noir. Chaque paire texte passe 4,5:1.</p>
+    </section>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+    <section class="card" aria-labelledby="t-typo">
+      <h2 id="t-typo" class="h">Typographie</h2>
+      <div style="display: flex; flex-direction: column; gap: 14px">
+        <div style="display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 16px; align-items: baseline; border-bottom: 1px solid #ECECE7; padding-bottom: 12px"><span class="mono cap">Titre · Archivo 800, largeur 112 %, 66/63</span><span style="font-size: 48px; line-height: 0.95; font-weight: 800; font-stretch: 112%; letter-spacing: -0.025em">Lundi 9 novembre</span></div>
+        <div style="display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 16px; align-items: baseline; border-bottom: 1px solid #ECECE7; padding-bottom: 12px"><span class="mono cap">Section · 750, 28</span><span style="font-size: 28px; font-weight: 750; letter-spacing: -0.01em">À regarder d’abord</span></div>
+        <div style="display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 16px; align-items: baseline; border-bottom: 1px solid #ECECE7; padding-bottom: 12px"><span class="mono cap">Texte · 400, 16/24</span><span style="font-size: 16px; line-height: 1.5">573 voitures passent en salle demain. Avant d’enchérir, voyez ce que dit leur contrôle technique.</span></div>
+        <div style="display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 16px; align-items: baseline; border-bottom: 1px solid #ECECE7; padding-bottom: 12px"><span class="mono cap">Chiffres · 700, largeur 75 %, tabulaires</span><span style="display: flex; gap: 20px; align-items: baseline"><span class="fig" style="font-size: 44px">7 123 €</span><span class="fig" style="font-size: 23px">10 182 €</span><span class="tag">751</span></span></div>
+        <div style="display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 16px; align-items: baseline"><span class="mono cap">Étiquettes · JetBrains Mono 500, 11, capitales +6 %</span><span style="display: flex; gap: 20px; align-items: baseline"><span class="lbl">Contrôle technique</span><span class="mono" style="font-size: 12px; color: #474A51">4.5.2.a.1 · PV CT</span></span></div>
+      </div>
+      <p class="cap" style="margin: 0">Une seule famille variable (Archivo, OFL), hébergée sur le site, plus une chasse fixe pour les codes, dates et sources. Les capitales sont réservées aux petites étiquettes. Polices de repli : Arial, puis la police du système.</p>
+    </section>
+
+    <section class="card" aria-labelledby="t-grid">
+      <h2 id="t-grid" class="h">La grille du CT</h2>
+      <p class="cap" style="margin: 0">Trois cases sur trois, une par fonction contrôlée, de 0 à 8, toujours dans le même ordre. La pire défaillance de chaque fonction donne la couleur de sa case. Une ligne d’un coup d’œil, le détail dans la fiche.</p>
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; max-width: 420px">
+        <div style="padding: 8px 10px; border: 1px solid #DEDED8; border-radius: 3px; font-size: 12.5px; line-height: 1.2"><span class="mono" style="color: #6A6E76">0</span> Identification</div><div style="padding: 8px 10px; border: 1px solid #DEDED8; border-radius: 3px; font-size: 12.5px; line-height: 1.2"><span class="mono" style="color: #6A6E76">1</span> Freinage</div><div style="padding: 8px 10px; border: 1px solid #DEDED8; border-radius: 3px; font-size: 12.5px; line-height: 1.2"><span class="mono" style="color: #6A6E76">2</span> Direction</div><div style="padding: 8px 10px; border: 1px solid #DEDED8; border-radius: 3px; font-size: 12.5px; line-height: 1.2"><span class="mono" style="color: #6A6E76">3</span> Visibilité</div><div style="padding: 8px 10px; border: 1px solid #DEDED8; border-radius: 3px; font-size: 12.5px; line-height: 1.2"><span class="mono" style="color: #6A6E76">4</span> Feux et électricité</div><div style="padding: 8px 10px; border: 1px solid #DEDED8; border-radius: 3px; font-size: 12.5px; line-height: 1.2"><span class="mono" style="color: #6A6E76">5</span> Essieux, roues, pneus, suspension</div><div style="padding: 8px 10px; border: 1px solid #DEDED8; border-radius: 3px; font-size: 12.5px; line-height: 1.2"><span class="mono" style="color: #6A6E76">6</span> Châssis et carrosserie</div><div style="padding: 8px 10px; border: 1px solid #DEDED8; border-radius: 3px; font-size: 12.5px; line-height: 1.2"><span class="mono" style="color: #6A6E76">7</span> Équipements</div><div style="padding: 8px 10px; border: 1px solid #DEDED8; border-radius: 3px; font-size: 12.5px; line-height: 1.2"><span class="mono" style="color: #6A6E76">8</span> Nuisances</div>
+      </div>
+      <div style="display: flex; gap: 20px; flex-wrap: wrap; font-size: 13px">
+        <span style="display: inline-flex; align-items: center; gap: 8px"><span class="fc"></span>RAS</span>
+        <span style="display: inline-flex; align-items: center; gap: 8px"><span class="fc fc-n"></span>Mineure</span>
+        <span style="display: inline-flex; align-items: center; gap: 8px"><span class="fc fc-M"></span>Majeure</span>
+        <span style="display: inline-flex; align-items: center; gap: 8px"><span class="fc fc-C"></span>Critique</span>
+        <span style="display: inline-flex; align-items: center; gap: 8px"><span class="fc fc-u"></span>CT absent ou illisible</span>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; border-top: 1px solid #ECECE7; padding-top: 14px">
+        
+          <div style="display: flex; gap: 10px; align-items: flex-start"><span class="fp" aria-hidden="true"><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span></span><span style="font-size: 13px; line-height: 1.25"><span style="font-weight: 650; color: #146C43; display: block">Favorable</span><span style="color: #474A51">aucune défaillance</span></span></div>
+        
+          <div style="display: flex; gap: 10px; align-items: flex-start"><span class="fp" aria-hidden="true"><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc fc-n"></span><span class="fc fc-n"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span></span><span style="font-size: 13px; line-height: 1.25"><span style="font-weight: 650; color: #146C43; display: block">Favorable</span><span style="color: #474A51">2 mineures</span></span></div>
+        
+          <div style="display: flex; gap: 10px; align-items: flex-start"><span class="fp" aria-hidden="true"><span class="fc"></span><span class="fc fc-M"></span><span class="fc fc-n"></span><span class="fc"></span><span class="fc fc-M"></span><span class="fc"></span><span class="fc fc-n"></span><span class="fc"></span><span class="fc fc-M"></span></span><span style="font-size: 13px; line-height: 1.25"><span style="font-weight: 650; color: #B4470B; display: block">Défavorable</span><span style="color: #474A51">3 majeures</span></span></div>
+        
+          <div style="display: flex; gap: 10px; align-items: flex-start"><span class="fp" aria-hidden="true"><span class="fc"></span><span class="fc fc-C"></span><span class="fc"></span><span class="fc"></span><span class="fc fc-M"></span><span class="fc"></span><span class="fc fc-M"></span><span class="fc"></span><span class="fc"></span></span><span style="font-size: 13px; line-height: 1.25"><span style="font-weight: 650; color: #A3161F; display: block">Défavorable</span><span style="color: #474A51">1 critique</span></span></div>
+        
+      </div>
+      <p class="cap" style="margin: 0">Les deux derniers exemples sont fictifs. Pour les 523 lots en une ligne, l’instantané doit fournir la pire gravité par fonction : neuf caractères par lot.</p>
+    </section>
+  </div>
+
+  <section class="card" aria-labelledby="t-cmp">
+    <h2 id="t-cmp" class="h">Composants</h2>
+    <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 28px">
+      <div style="display: flex; flex-direction: column; gap: 12px">
+        <span class="lbl" style="color: #474A51">Numéro de lot</span>
+        <div style="display: flex; gap: 12px; align-items: center"><span class="tag" style="font-size: 24px; height: 36px; min-width: 64px">538</span><span class="tag">751</span><span class="tag" style="background: transparent; box-shadow: inset 0 0 0 1.5px #121316; font-size: 17px; height: 26px">506</span></div>
+        <p class="cap" style="margin: 0">Fiche, ligne détaillée, ligne courte (contour seul, pour alléger 523 lignes). Un futur code maison se place avant le numéro : ALC 751.</p>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 12px">
+        <span class="lbl" style="color: #474A51">Note et profil</span>
+        <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px">
+          
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 4px">
+              <span class="ring" style="width: 52px; height: 52px"><svg width="52" height="52" viewBox="0 0 52 52" aria-hidden="true"><circle cx="26" cy="26" r="22" fill="none" stroke="#ECECE7" stroke-width="5"></circle><circle cx="26" cy="26" r="22" fill="none" stroke="#1F8F50" stroke-width="5" stroke-linecap="round" stroke-dasharray="116.1 200"></circle></svg><span class="rn" style="font-size: 20px">84</span></span>
+              <span style="font-size: 11.5px; font-weight: 650; color: #146C43">favorable</span>
+              <span class="mono" style="font-size: 10.5px; color: #6A6E76">80–100</span>
+            </div>
+          
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 4px">
+              <span class="ring" style="width: 52px; height: 52px"><svg width="52" height="52" viewBox="0 0 52 52" aria-hidden="true"><circle cx="26" cy="26" r="22" fill="none" stroke="#ECECE7" stroke-width="5"></circle><circle cx="26" cy="26" r="22" fill="none" stroke="#A87C00" stroke-width="5" stroke-linecap="round" stroke-dasharray="107.8 200"></circle></svg><span class="rn" style="font-size: 20px">78</span></span>
+              <span style="font-size: 11.5px; font-weight: 650; color: #7A5A00">correct</span>
+              <span class="mono" style="font-size: 10.5px; color: #6A6E76">70–79</span>
+            </div>
+          
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 4px">
+              <span class="ring" style="width: 52px; height: 52px"><svg width="52" height="52" viewBox="0 0 52 52" aria-hidden="true"><circle cx="26" cy="26" r="22" fill="none" stroke="#ECECE7" stroke-width="5"></circle><circle cx="26" cy="26" r="22" fill="none" stroke="#D9620F" stroke-width="5" stroke-linecap="round" stroke-dasharray="91.2 200"></circle></svg><span class="rn" style="font-size: 20px">66</span></span>
+              <span style="font-size: 11.5px; font-weight: 650; color: #B4470B">correct</span>
+              <span class="mono" style="font-size: 10.5px; color: #6A6E76">60–69</span>
+            </div>
+          
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 4px">
+              <span class="ring" style="width: 52px; height: 52px"><svg width="52" height="52" viewBox="0 0 52 52" aria-hidden="true"><circle cx="26" cy="26" r="22" fill="none" stroke="#ECECE7" stroke-width="5"></circle><circle cx="26" cy="26" r="22" fill="none" stroke="#C8202F" stroke-width="5" stroke-linecap="round" stroke-dasharray="78.8 200"></circle></svg><span class="rn" style="font-size: 20px">57</span></span>
+              <span style="font-size: 11.5px; font-weight: 650; color: #A3161F">risque</span>
+              <span class="mono" style="font-size: 10.5px; color: #6A6E76">0–59</span>
+            </div>
+          
+        </div>
+        <p class="cap" style="margin: 0">L’anneau se remplit selon la note, le chiffre toujours au centre, le profil dessous : la couleur n’est jamais le seul repère. Le jaune de l’anneau est un moutarde plus sombre que le jaune des numéros de lot, pour ne pas les confondre.</p>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 12px">
+        <span class="lbl" style="color: #474A51">Signal de ligne</span>
+        <div style="display: flex; flex-direction: column; gap: 8px; font-size: 13.5px">
+          <span style="display: inline-flex; align-items: center; gap: 6px; font-weight: 600; color: #A3161F"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2 20h20L12 3z"></path><path d="M12 10v4M12 17h.01"></path></svg>Moteur à risque connu</span>
+          <span style="display: inline-flex; align-items: center; gap: 6px; color: #8A5A00"><span style="width: 7px; height: 7px; background: #B97A0B; transform: rotate(45deg)"></span>24 028 km par an</span>
+          <span style="display: inline-flex; align-items: center; gap: 6px; color: #474A51"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5V14M12 17h.01"></path></svg>Prix pas encore comparé</span>
+        </div>
+        <p class="cap" style="margin: 0">Un seul signal par ligne, hors CT (déjà dans sa colonne) : moteur, kilométrage, odomètre, batterie louée, donnée manquante.</p>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 12px">
+        <span class="lbl" style="color: #474A51">Actions</span>
+        <a href="#" style="display: flex; align-items: center; justify-content: center; gap: 10px; height: 48px; border-radius: 4px; background: #121316; color: #FFFFFF; text-decoration: none; font-weight: 650">Voir l’annonce sur Alcopa <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"></path></svg></a>
+        <div style="display: flex; gap: 8px; padding: 10px; background: #121316; border-radius: 4px"><button type="button" style="flex: 1; height: 44px; border: 0; border-radius: 4px; background: #FFD23F; color: #121316; font: inherit; font-weight: 700">Voir les lots</button><button type="button" style="height: 44px; border: 1px solid #3A3D44; border-radius: 4px; background: transparent; color: #ECECE7; font: inherit; padding: 0 12px">CT favorable 45</button></div>
+        <button type="button" style="height: 44px; border: 1px solid #C9CAC4; border-radius: 4px; background: #FFFFFF; color: #121316; font: inherit; font-size: 14px">Afficher les 523 lots</button>
+        <div style="display: flex; align-items: center; gap: 12px">
+          <div role="group" aria-label="Langue du site" style="display: flex; border: 1px solid #3A3D44; border-radius: 4px; overflow: hidden; height: 40px; background: #121316">
+            <a href="#" lang="fr" hreflang="fr" aria-current="true" aria-label="Français" style="display: flex; align-items: center; justify-content: center; width: 44px; background: #ECECE7; color: #121316; text-decoration: none; font-size: 13px; font-weight: 700">FR</a>
+            <a href="#" lang="en" hreflang="en" aria-label="English" style="display: flex; align-items: center; justify-content: center; width: 44px; color: #B9BBC2; text-decoration: none; font-size: 13px; font-weight: 600">EN</a>
+          </div>
+          <span class="cap">Langue : dans la barre de navigation, sur chaque page.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+    <section class="card" aria-labelledby="t-states">
+      <h2 id="t-states" class="h">États à prévoir</h2>
+      <div style="display: flex; flex-direction: column; gap: 12px">
+        <div style="padding: 14px; border: 1px dashed #8E9198; border-radius: 4px; display: flex; flex-direction: column; gap: 6px"><span style="font-weight: 650">Lien de l’annonce indisponible</span><span style="font-size: 14px; color: #474A51">Le bouton devient un texte : «&nbsp;Annonce introuvable. <a href="#">Ouvrir le catalogue de la vente ↗</a>&nbsp;». Jamais d’adresse fabriquée à partir d’un numéro de lot.</span></div>
+        <div style="padding: 14px; border: 1px solid #DEDED8; border-radius: 4px; display: flex; gap: 10px; align-items: flex-start"><span class="fp" aria-hidden="true"><span class="fc fc-u"></span><span class="fc fc-u"></span><span class="fc fc-u"></span><span class="fc fc-u"></span><span class="fc fc-u"></span><span class="fc fc-u"></span><span class="fc fc-u"></span><span class="fc fc-u"></span><span class="fc fc-u"></span></span><span style="font-size: 14px; color: #474A51"><strong style="color: #121316; font-weight: 650">CT illisible.</strong> Grille en pointillés, note plafonnée à «&nbsp;correct&nbsp;», et la question à poser en salle.</span></div>
+        <div style="padding: 14px; border: 1px solid #DEDED8; border-radius: 4px; display: flex; flex-direction: column; gap: 6px"><span style="font-weight: 650">Aucun lot pour ces filtres</span><span style="font-size: 14px; color: #474A51">«&nbsp;Aucun lot sous 6 000 € avec un CT favorable. 3 lots avec 1 défaillance majeure entrent dans ce budget.&nbsp;» Puis «&nbsp;Retirer le filtre CT&nbsp;».</span></div>
+        <div style="padding: 14px; border: 1px solid #DEDED8; border-radius: 4px; display: flex; flex-direction: column; gap: 6px"><span style="font-weight: 650">Lien direct vers un lot absent</span><span style="font-size: 14px; color: #474A51">«&nbsp;Le lot 1212 n’est pas dans la vente du 9 novembre.&nbsp;» Puis la recherche, déjà remplie.</span></div>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="t-motion">
+      <h2 id="t-motion" class="h">Mouvement</h2>
+      <p class="cap" style="margin: 0">Le mouvement sert à suivre un changement, jamais à décorer. Pas d’animation d’accueil. Rien ne bouge au clavier ni au défilement.</p>
+      <table style="width: 100%; border-collapse: collapse; font-size: 13.5px">
+        <thead><tr class="lbl" style="color: #474A51; text-align: left"><th style="padding: 8px 8px 8px 0; border-bottom: 2px solid #121316">Moment</th><th style="padding: 8px; border-bottom: 2px solid #121316">Effet</th><th style="padding: 8px 0 8px 8px; border-bottom: 2px solid #121316">Durée</th></tr></thead>
+        <tbody>
+          <tr><td style="padding: 10px 8px 10px 0; border-bottom: 1px solid #ECECE7">Fiche ouverte sur téléphone</td><td style="padding: 10px 8px; border-bottom: 1px solid #ECECE7">glisse depuis la droite, la liste garde sa position</td><td class="mono" style="padding: 10px 0 10px 8px; border-bottom: 1px solid #ECECE7">240 ms</td></tr>
+          <tr><td style="padding: 10px 8px 10px 0; border-bottom: 1px solid #ECECE7">Autre lot sur ordinateur</td><td style="padding: 10px 8px; border-bottom: 1px solid #ECECE7">fondu du contenu de la fiche</td><td class="mono" style="padding: 10px 0 10px 8px; border-bottom: 1px solid #ECECE7">120 ms</td></tr>
+          <tr><td style="padding: 10px 8px 10px 0; border-bottom: 1px solid #ECECE7">Filtre par couleur de la grille</td><td style="padding: 10px 8px; border-bottom: 1px solid #ECECE7">les autres carrés passent à 20 % d’opacité</td><td class="mono" style="padding: 10px 0 10px 8px; border-bottom: 1px solid #ECECE7">160 ms</td></tr>
+          <tr><td style="padding: 10px 8px 10px 0; border-bottom: 1px solid #ECECE7">Ligne survolée, bouton pressé</td><td style="padding: 10px 8px; border-bottom: 1px solid #ECECE7">fond ; échelle 0,97</td><td class="mono" style="padding: 10px 0 10px 8px; border-bottom: 1px solid #ECECE7">120 ms</td></tr>
+          <tr><td style="padding: 10px 8px 10px 0">Mouvement réduit</td><td style="padding: 10px 8px">aucune translation ; fondus seulement</td><td class="mono" style="padding: 10px 0 10px 8px">0–120 ms</td></tr>
+        </tbody>
+      </table>
+      <p class="mono cap" style="margin: 0">Courbe : cubic-bezier(0.23, 1, 0.32, 1)</p>
+    </section>
+  </div>
+</div>
+</div>
+
+
+
+</body></html>

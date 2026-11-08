@@ -7,6 +7,7 @@ import pytest
 
 from auction_agent import cli
 from auction_agent.preview import (
+    CONTENT_TYPES,
     MAX_BYTES,
     WEB_DIR,
     folder_source,
@@ -84,8 +85,22 @@ def test_static_file_rules():
     assert static_file(WEB_DIR, "/") == (WEB_DIR / "index.html").resolve()
     assert static_file(WEB_DIR, "/about.html") == (WEB_DIR / "about.html").resolve()
     assert static_file(WEB_DIR, "/api/snapshot.py") is None
-    assert static_file(WEB_DIR, "/vercel.json") is None  # .json is not a served type
+    assert static_file(WEB_DIR, "/vercel.json") is None  # JSON only from the dictionaries' folder
     assert static_file(WEB_DIR, "/..%2F..%2Fauction_agent%2Fcli.py") is None
+
+
+def test_fonts_dictionaries_and_folder_pages_are_served(tmp_path):
+    """Redesign v2: self-hosted fonts, the FR/EN dictionaries and /en/ (served as Vercel does)."""
+    for rel, data in {"fonts/a.woff2": b"wOF2", "i18n/en.json": b"{}", "i18n/x/deep.json": b"{}",
+                      "en/index.html": b"<html>", "vercel.json": b"{}", "data.json": b"{}"}.items():
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_bytes(data)
+    assert static_file(tmp_path, "/fonts/a.woff2") == (tmp_path / "fonts" / "a.woff2").resolve()
+    assert CONTENT_TYPES[".woff2"] == "font/woff2"
+    assert static_file(tmp_path, "/i18n/en.json") == (tmp_path / "i18n" / "en.json").resolve()
+    assert static_file(tmp_path, "/en/") == (tmp_path / "en" / "index.html").resolve()
+    for private in ("/vercel.json", "/data.json", "/i18n/x/deep.json", "/api/", "/fonts/"):
+        assert static_file(tmp_path, private) is None, private
 
 
 def test_preview_listens_only_on_this_computer():

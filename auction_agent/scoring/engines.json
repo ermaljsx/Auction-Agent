@@ -1,10 +1,11 @@
 {
-  "version": "kb-2026.10",
-  "notes": "Seed entries only (Phase 1). Each entry lists its sources and confidence; manufacturer cover programmes are recorded but give no score credit until maintenance evidence is parsed (Phase 3). 'weak_regex' only counts when the engine displacement (cc) is known and listed.",
+  "version": "kb-2026.11",
+  "notes": "Seed entries only (Phase 1). Each entry lists its sources and confidence; manufacturer cover programmes are recorded but give no score credit until maintenance evidence is parsed (Phase 3). 'weak_regex' only counts when the engine displacement (cc) is known and listed. A power figure is ended by (?!\\d), never \\b: trims read '130CH', where \\b finds no boundary between '0' and 'C' (kb-2026.11). 'check_fr' is the buyer action the site shows with the risk.",
   "engines": [
     {
       "id": "stellantis_puretech_eb2_turbo",
       "label_fr": "1.2 PureTech turbo : courroie de distribution « humide » qui se délite, consommation d'huile",
+      "check_fr": "Demandez une facture de remplacement de la courroie et vérifiez si la garantie couvre la distribution.",
       "match": {
         "brands": [
           "PEUGEOT",
@@ -18,7 +19,7 @@
           "hybrid",
           "plugin_hybrid"
         ],
-        "text_regex": "PURE\\s*TECH\\s*(?:S&S\\s*)?(?:100|110|130|155)\\b|(?<![\\d.])1[.,]2\\s*(?:L\\s*)?TURBO\\s*(?:100|110|130|155)?\\b",
+        "text_regex": "PURE\\s*TECH\\s*(?:S&S\\s*)?(?:100|110|130|155)(?!\\d)|(?<![\\d.])1[.,]2\\s*(?:L\\s*)?TURBO\\s*(?:100|110|130|155)?(?!\\d)",
         "engine_cc": [
           1199
         ],
@@ -42,6 +43,7 @@
     {
       "id": "stellantis_bluehdi_15_dv5",
       "label_fr": "1.5 BlueHDi (DV5) : chaîne reliant les arbres à cames qui s'allonge et peut casser (moteurs ~2017–2023)",
+      "check_fr": "Demandez une facture de contrôle ou de remplacement de la chaîne d'arbres à cames, et vérifiez si la prise en charge du constructeur couvre ce véhicule.",
       "match": {
         "brands": [
           "PEUGEOT",
@@ -54,13 +56,13 @@
         "fuels": [
           "diesel"
         ],
-        "text_regex": "1[.,]5\\s*(?:L\\s*)?BLUE\\s*HDI|BLUE\\s*HDI\\s*130\\b",
+        "text_regex": "1[.,]5\\s*(?:L\\s*)?BLUE\\s*HDI|BLUE\\s*HDI\\s*130(?!\\d)",
         "engine_cc": [
           1499
         ],
         "year_from": 2017,
         "year_to": 2023,
-        "weak_regex": "BLUE\\s*HDI\\s*(?:100|102|110|120)\\b"
+        "weak_regex": "BLUE\\s*HDI\\s*(?:100|102|110|120)(?!\\d)"
       },
       "penalty": 20,
       "catastrophic": true,
@@ -79,6 +81,7 @@
     {
       "id": "renault_tce_12_h5ft",
       "label_fr": "1.2 TCe (H5Ft) : surconsommation d'huile sur les moteurs produits d'octobre 2012 à juillet 2016",
+      "check_fr": "Demandez l'historique d'entretien et toute facture liée à une consommation d'huile excessive.",
       "match": {
         "brands": [
           "RENAULT",
@@ -88,7 +91,7 @@
         "fuels": [
           "petrol"
         ],
-        "text_regex": "TCE\\s*(?:115|120|125|130)\\b|DIG-?T\\s*115",
+        "text_regex": "TCE\\s*(?:115|120|125|130)(?!\\d)|DIG-?T\\s*115",
         "engine_cc": [
           1197,
           1198

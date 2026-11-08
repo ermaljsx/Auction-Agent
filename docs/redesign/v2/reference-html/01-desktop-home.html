@@ -1,0 +1,681 @@
+<!doctype html>
+<html lang="fr"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Auction France · Vente du lundi 9 novembre, Beauvais</title>
+<style>
+@font-face{font-family:"Archivo";font-style:normal;font-display:block;font-weight:100 900;font-stretch:62% 125%;src:url(../fonts/archivo-latin-wdth-wght.woff2) format("woff2-variations"),url(../fonts/archivo-latin-wdth-wght.woff2) format("woff2")}
+@font-face{font-family:"JetBrains Mono";font-style:normal;font-display:block;font-weight:100 800;src:url(../fonts/jetbrains-mono-latin-wght.woff2) format("woff2-variations"),url(../fonts/jetbrains-mono-latin-wght.woff2) format("woff2")}
+</style>
+<style>
+body{margin:0;background:#F3F3F0;color:#121316;font-family:Archivo,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Arial,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:#121316}a:hover{color:#474A51}
+h1,h2,h3{text-wrap:balance}p{text-wrap:pretty}
+.fig{font-stretch:75%;font-variant-numeric:tabular-nums;font-weight:700}
+.mono{font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.lbl{font-family:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase}
+.wrap{max-width:1440px;margin:0 auto;padding:0 80px;box-sizing:border-box}
+.waf{display:grid;grid-template-columns:repeat(48,9px);gap:2px}
+.w{width:9px;height:9px;border-radius:1px;box-sizing:border-box}
+.w-g{background:#3CCB7F}.w-m{background:#8A5634}.w-c{background:#FF5D5D}.w-u{border:1px solid #8E929B}
+.fp{display:grid;grid-template-columns:repeat(3,8px);gap:2px;flex:none}
+.fc{width:8px;height:8px;border-radius:1px;box-sizing:border-box;border:1px solid #B5B8B1;background:#FFFFFF}
+.fc-n{background:#C4C6C0;border-color:#8E9198}.fc-M{background:#E26A16;border-color:#E26A16}.fc-C{background:#7F1D1D;border-color:#7F1D1D}.fc-u{border-style:dashed;border-color:#8E9198;background:transparent}
+.row{display:grid;grid-template-columns:60px minmax(0,1fr) 156px 112px 64px;gap:16px;align-items:start;padding:16px;text-decoration:none;color:#121316;border-bottom:1px solid #DEDED8}
+.row:hover{background:#FAFAF8;color:#121316}
+.crow{display:grid;grid-template-columns:60px minmax(0,1fr) 156px 112px 64px;gap:16px;align-items:center;padding:12px 16px;text-decoration:none;color:#121316;border-bottom:1px solid #DEDED8}
+.crow:hover{background:#FAFAF8;color:#121316}
+.thead{display:grid;grid-template-columns:60px minmax(0,1fr) 156px 112px 64px;gap:16px;padding:0 16px 10px;border-bottom:2px solid #121316;color:#474A51}
+.tag{display:inline-flex;align-items:center;justify-content:center;min-width:52px;height:30px;padding:0 8px;box-sizing:border-box;background:#FFD23F;color:#121316;border-radius:3px;font-stretch:75%;font-weight:800;font-size:19px;font-variant-numeric:tabular-nums}
+.tag-o{background:transparent;box-shadow:inset 0 0 0 1.5px #121316}
+.ctl{height:40px;box-sizing:border-box;border:1px solid #C9CAC4;border-radius:4px;background:#FFFFFF;color:#121316;font:inherit;font-size:14px;display:inline-flex;align-items:center;gap:8px;padding:0 12px;cursor:pointer}
+.chip-d{height:40px;box-sizing:border-box;border:1px solid #3A3D44;border-radius:4px;background:transparent;color:#ECECE7;font:inherit;font-size:14px;display:inline-flex;align-items:center;gap:8px;padding:0 14px;cursor:pointer}
+.chip-d:hover{border-color:#8E929B}
+.leg{display:flex;align-items:center;gap:10px;height:44px;padding:0 12px;border:1px solid #2E3036;border-radius:4px;background:transparent;color:#ECECE7;font:inherit;font-size:14px;text-align:left;cursor:pointer}
+.leg:hover{border-color:#6A6E76}
+.sw{width:12px;height:12px;border-radius:2px;flex:none;box-sizing:border-box}
+.pane-sec{padding:24px 28px;border-top:1px solid #DEDED8}
+.ring{position:relative;flex:none;display:inline-block}.ring>svg{display:block;transform:rotate(-90deg)}.ring>.rn{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-stretch:75%;font-variant-numeric:tabular-nums;font-weight:800;color:#121316}
+.btn-p{display:flex;align-items:center;justify-content:center;gap:10px;height:52px;padding:0 20px;border-radius:4px;background:#121316;color:#FFFFFF;text-decoration:none;font-weight:650;font-size:16px}
+.btn-p:hover{background:#2B2D33;color:#FFFFFF}
+.btn-g{display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 14px;border-radius:4px;border:1px solid #C9CAC4;background:#FFFFFF;color:#121316;font:inherit;font-size:14px;cursor:pointer}
+.hatch{background:repeating-linear-gradient(-45deg,#DEDED8 0 3px,#FFFFFF 3px 6px)}
+.num-in{height:44px;width:100%;box-sizing:border-box;border:1px solid #C9CAC4;border-radius:4px;padding:0 40px 0 12px;font:inherit;font-size:18px;font-weight:700;font-stretch:75%;font-variant-numeric:tabular-nums;color:#121316;background:#FFFFFF}
+.num-in:focus,.ctl:focus,.btn-g:focus{outline:2px solid #121316;outline-offset:2px}
+@media (max-width:860px){.wrap{padding:0 16px}.row,.crow,.thead{grid-template-columns:56px minmax(0,1fr) 96px}.row>.c-ct,.crow>.c-ct,.thead>.c-ct{grid-column:2/4}.row>.c-sc,.crow>.c-sc,.thead>.c-sc{display:none}}
+</style>
+</head>
+<body>
+<div id="dc-root">
+
+
+<div style="min-width: 0">
+
+<!-- ============ BANDE CARBONE : masthead + héros ============ -->
+<div style="background: #121316; color: #ECECE7">
+  <div class="wrap">
+    <header style="display: flex; align-items: center; gap: 32px; height: 72px; border-bottom: 1px solid #2A2C31; flex-wrap: wrap">
+      <a href="#top" style="display: flex; align-items: center; gap: 12px; color: #FFFFFF; text-decoration: none" aria-label="Auction France, accueil">
+        <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><rect width="28" height="28" rx="5" fill="#FFD23F"></rect><g fill="#121316"><rect x="6" y="6" width="4.5" height="4.5" rx=".6"></rect><rect x="11.75" y="6" width="4.5" height="4.5" rx=".6"></rect><rect x="17.5" y="6" width="4.5" height="4.5" rx=".6"></rect><rect x="6" y="11.75" width="4.5" height="4.5" rx=".6"></rect><rect x="17.5" y="11.75" width="4.5" height="4.5" rx=".6"></rect><rect x="6" y="17.5" width="4.5" height="4.5" rx=".6"></rect><rect x="11.75" y="17.5" width="4.5" height="4.5" rx=".6"></rect><rect x="17.5" y="17.5" width="4.5" height="4.5" rx=".6"></rect></g><rect x="12.35" y="12.35" width="3.3" height="3.3" rx=".4" fill="none" stroke="#121316" stroke-width="1.2"></rect></svg>
+        <span style="font-size: 19px; font-weight: 800; font-stretch: 112%; letter-spacing: -0.01em">Auction France</span>
+      </a>
+      <nav aria-label="Principale" style="display: flex; gap: 24px; font-size: 15px">
+        <a href="#catalogue" aria-current="page" style="color: #FFFFFF; text-decoration: none; font-weight: 600; box-shadow: inset 0 -2px 0 #FFD23F; padding: 6px 0">Ventes</a>
+        <a href="about.html" style="color: #B9BBC2; text-decoration: none; padding: 6px 0">Méthode</a>
+      </nav>
+      <div style="flex: 1"></div>
+      <span class="mono" style="font-size: 12px; color: #8E929B">Gratuit · indépendant des maisons de vente</span>
+      <div role="group" aria-label="Langue du site" style="display: flex; border: 1px solid #3A3D44; border-radius: 4px; overflow: hidden; height: 34px">
+        <a href="?lang=fr" lang="fr" hreflang="fr" aria-current="true" aria-label="Français" title="Français" style="display: flex; align-items: center; padding: 0 12px; background: #ECECE7; color: #121316; text-decoration: none; font-size: 13px; font-weight: 700">FR</a>
+        <a href="?lang=en" lang="en" hreflang="en" aria-label="English" title="English" style="display: flex; align-items: center; padding: 0 12px; color: #B9BBC2; text-decoration: none; font-size: 13px; font-weight: 600">EN</a>
+      </div>
+    </header>
+
+    <section id="top" aria-labelledby="h1" style="display: flex; flex-wrap: wrap; gap: 56px; padding: 56px 0 48px">
+      <div style="flex: 1 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 24px">
+        <p class="lbl" style="margin: 0; color: #B9BBC2">Ventes aux enchères de voitures · France</p>
+        <h1 id="h1" style="margin: 0; font-size: 60px; line-height: 0.98; font-weight: 800; font-stretch: 112%; letter-spacing: -0.025em; color: #FFFFFF">Les voitures aux enchères, <span style="box-shadow: inset 0 -0.16em 0 #FFD23F; -webkit-box-decoration-break: clone; box-decoration-break: clone">décodées</span> avant la vente.</h1>
+        <p style="margin: 0; font-size: 19px; line-height: 1.5; color: #CFD0D4; max-width: 34em">Pour chaque lot : ce que dit le contrôle technique, les moteurs à risque connus et le coût réel, frais d’achat compris. Puis l’annonce officielle, en un clic.</p>
+
+        <form role="search" aria-label="Chercher un lot" style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px">
+          <label style="flex: 1 1 240px; min-width: 0; position: relative; display: block">
+            <span class="lbl" style="display: block; color: #8E929B; margin-bottom: 8px">Chercher un lot</span>
+            <span style="position: absolute; left: 16px; bottom: 16px; color: #6A6E76; display: flex"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span>
+            <input type="search" placeholder="Marque, modèle ou n° de lot" style="width: 100%; height: 56px; box-sizing: border-box; border: 0; border-radius: 4px; padding: 0 16px 0 50px; font: inherit; font-size: 17px; background: #FFFFFF; color: #121316">
+          </label>
+          <label style="flex: 0 1 170px; display: block">
+            <span class="lbl" style="display: block; color: #8E929B; margin-bottom: 8px">Budget max, coût total</span>
+            <input type="text" inputmode="numeric" placeholder="Sans limite" style="width: 100%; height: 56px; box-sizing: border-box; border: 0; border-radius: 4px; padding: 0 16px; font: inherit; font-size: 17px; background: #FFFFFF; color: #121316">
+          </label>
+          <div style="flex: 0 0 auto; display: flex; align-items: flex-end">
+            <button type="submit" style="height: 56px; padding: 0 24px; border: 0; border-radius: 4px; background: #FFD23F; color: #121316; font: inherit; font-size: 17px; font-weight: 700; cursor: pointer">Voir les lots</button>
+          </div>
+        </form>
+
+        <div role="group" aria-label="Raccourcis" style="display: flex; flex-wrap: wrap; gap: 8px">
+          <button type="button" class="chip-d" aria-pressed="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3CCB7F" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"></path></svg>CT favorable <span class="fig" style="font-size: 16px; color: #FFFFFF">45</span></button>
+          <button type="button" class="chip-d" aria-pressed="false">Sans moteur à risque connu</button>
+          <button type="button" class="chip-d" aria-pressed="false">Boîte automatique</button>
+          <button type="button" class="chip-d" aria-pressed="false">Moins de 100 000 km</button>
+          <button type="button" class="chip-d" aria-pressed="false">Hybride ou électrique</button>
+        </div>
+      </div>
+
+      <aside aria-labelledby="h-glance" style="flex: 0 1 578px; min-width: 0; background: #1A1B1F; border: 1px solid #2A2C31; border-radius: 6px; padding: 24px; box-sizing: border-box; display: flex; flex-direction: column; gap: 18px">
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 16px">
+          <span class="lbl" style="color: #B9BBC2">Prochaine vente analysée</span>
+          <span style="font-size: 13px; font-weight: 700; color: #121316; background: #FFD23F; border-radius: 3px; padding: 3px 8px">Demain</span>
+        </div>
+        <div>
+          <h2 id="h-glance" style="margin: 0; font-size: 34px; line-height: 1; font-weight: 800; font-stretch: 110%; letter-spacing: -0.015em; color: #FFFFFF">Lundi 9 novembre</h2>
+          <p style="margin: 8px 0 0; font-size: 15px; color: #CFD0D4">Alcopa · salle de Beauvais · voitures particulières</p>
+        </div>
+        <dl style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; border-top: 1px solid #2A2C31; border-bottom: 1px solid #2A2C31">
+          <div style="padding: 10px 0"><dt class="lbl" style="font-size: 10px; color: #8E929B">Lots</dt><dd class="fig" style="margin: 4px 0 0; font-size: 26px; color: #FFFFFF">573</dd></div>
+          <div style="padding: 10px 0 10px 14px; border-left: 1px solid #2A2C31"><dt class="lbl" style="font-size: 10px; color: #8E929B">PV de CT lus</dt><dd class="fig" style="margin: 4px 0 0; font-size: 26px; color: #FFFFFF">564</dd></div>
+          <div style="padding: 10px 0 10px 14px; border-left: 1px solid #2A2C31"><dt class="lbl" style="font-size: 10px; color: #8E929B">CT favorables</dt><dd class="fig" style="margin: 4px 0 0; font-size: 26px; color: #3CCB7F">45</dd></div>
+        </dl>
+        <p style="margin: 0; font-size: 14px; line-height: 1.45; color: #B9BBC2">Résultat du contrôle technique, un carré par lot, dans l’ordre des numéros.</p>
+        <div style="overflow: hidden">
+          <div class="waf" role="img" aria-label="573 lots : 45 CT favorables, 460 défavorables pour défaillance majeure, 59 défavorables pour défaillance critique, 9 sans CT lisible.">
+            <div class="w w-u"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-g"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-u"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-g"></div><div class="w w-m"></div><div class="w w-c"></div><div class="w w-m"></div><div class="w w-c"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-u"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-c"></div><div class="w w-c"></div><div class="w w-g"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-g"></div><div class="w w-m"></div><div class="w w-g"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-g"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-g"></div><div class="w w-g"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-g"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-c"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-c"></div><div class="w w-g"></div><div class="w w-u"></div><div class="w w-c"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-g"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-g"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-c"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-u"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-g"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-g"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-g"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-g"></div><div class="w w-m"></div><div class="w w-c"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-c"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-c"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-g"></div><div class="w w-c"></div><div class="w w-m"></div><div class="w w-g"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-u"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-u"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-c"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-c"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-c"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-g"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-g"></div><div class="w w-g"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-c"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-g"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-g"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-c"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-c"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-c"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-u"></div><div class="w w-m"></div><div class="w w-g"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-g"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-c"></div><div class="w w-m"></div><div class="w w-c"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-g"></div><div class="w w-c"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-c"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-c"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-g"></div><div class="w w-m"></div><div class="w w-g"></div><div class="w w-c"></div><div class="w w-m"></div><div class="w w-g"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-c"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-c"></div><div class="w w-g"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-c"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-g"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-c"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-c"></div><div class="w w-g"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-c"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-c"></div><div class="w w-c"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-c"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-c"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-c"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-c"></div><div class="w w-c"></div><div class="w w-u"></div><div class="w w-m"></div><div class="w w-g"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-g"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-g"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-c"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-c"></div><div class="w w-m"></div><div class="w w-g"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-c"></div><div class="w w-m"></div><div class="w w-c"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-c"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-g"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-c"></div><div class="w w-c"></div><div class="w w-m"></div><div class="w w-c"></div><div class="w w-c"></div><div class="w w-g"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-c"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-c"></div><div class="w w-g"></div><div class="w w-m"></div><div class="w w-c"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-c"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-c"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-g"></div><div class="w w-g"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-g"></div><div class="w w-g"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-g"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-c"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-c"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-c"></div><div class="w w-c"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-c"></div><div class="w w-c"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-c"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-g"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div><div class="w w-m"></div>
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
+          <button type="button" class="leg" aria-pressed="false"><span class="sw" style="background: #3CCB7F"></span><span class="fig" style="font-size: 20px; color: #FFFFFF; min-width: 34px">45</span><span>CT favorable</span></button>
+          <button type="button" class="leg" aria-pressed="false"><span class="sw" style="background: #8A5634"></span><span class="fig" style="font-size: 20px; color: #FFFFFF; min-width: 34px">460</span><span>Défavorable · majeure</span></button>
+          <button type="button" class="leg" aria-pressed="false"><span class="sw" style="background: #FF5D5D"></span><span class="fig" style="font-size: 20px; color: #FFFFFF; min-width: 34px">59</span><span>Défavorable · critique</span></button>
+          <button type="button" class="leg" aria-pressed="false"><span class="sw" style="border: 1px solid #8E929B"></span><span class="fig" style="font-size: 20px; color: #FFFFFF; min-width: 34px">9</span><span>CT absent ou illisible</span></button>
+        </div>
+        <p style="margin: 0; font-size: 13px; line-height: 1.45; color: #8E929B">Majeure : contre-visite obligatoire sous deux mois. Critique : la voiture ne peut plus rouler après le jour du contrôle. Touchez une couleur pour filtrer.</p>
+        <div class="mono" role="status" style="display: flex; flex-direction: column; gap: 6px; padding-top: 14px; border-top: 1px solid #2A2C31; font-size: 12px; color: #B9BBC2">
+          <span>Analyse publiée dim. 8 nov. à 02:10 · <a href="#details" style="color: #ECECE7">détails</a></span>
+          <span style="display: inline-flex; align-items: center; gap: 8px"><span style="width: 7px; height: 7px; background: #F0A43A; transform: rotate(45deg)"></span>Classement provisoire : prix pas encore comparés · pas d’avis IA</span>
+        </div>
+        <a href="#catalogue" style="display: flex; align-items: center; justify-content: center; gap: 10px; height: 48px; border: 1px solid #5A5D64; border-radius: 4px; color: #FFFFFF; text-decoration: none; font-weight: 700; font-size: 15px">Voir les 573 lots de cette vente <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a>
+      </aside>
+    </section>
+
+    <div style="display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; padding: 16px 0 18px; border-top: 1px solid #2A2C31; font-size: 14px; color: #B9BBC2">
+      <span class="lbl" style="color: #8E929B">Ventes couvertes</span>
+      <span style="display: inline-flex; align-items: center; gap: 8px; color: #FFFFFF; font-weight: 600"><span style="width: 7px; height: 7px; border-radius: 50%; background: #3CCB7F"></span>Alcopa · Beauvais</span>
+      <span>D’autres salles s’ajouteront dès que leurs données seront fiables.</span>
+      <span style="flex: 1"></span>
+      <a href="about.html#couverture" style="color: #ECECE7">Ce que nous couvrons</a>
+    </div>
+  </div>
+</div>
+
+<!-- ============ CATALOGUE ============ -->
+<div id="catalogue" style="position: sticky; top: 0; z-index: 2; background: #FFFFFF; border-bottom: 1px solid #DEDED8; box-shadow: 0 6px 20px rgba(18, 19, 22, 0.05)">
+  <div class="wrap">
+    <div style="display: flex; align-items: stretch; gap: 28px; height: 52px; border-bottom: 1px solid #ECECE7">
+    <div style="display: flex; align-items: center; gap: 10px; padding-right: 28px; border-right: 1px solid #DEDED8; white-space: nowrap">
+      <span class="lbl" style="color: #6A6E76">Vente</span>
+      <span style="font-size: 15px; font-weight: 700">Alcopa Beauvais · lun. 9 nov.</span>
+    </div>
+    <nav aria-label="Parties du catalogue" style="display: flex; gap: 28px; align-items: stretch; overflow-x: auto; min-width: 0">
+      <a href="#selection" aria-current="true" style="display: flex; align-items: center; gap: 8px; text-decoration: none; color: #121316; font-weight: 650; font-size: 15px; box-shadow: inset 0 -3px 0 #121316; white-space: nowrap">À regarder d’abord <span class="fig" style="font-size: 17px">10</span></a>
+      <a href="#autres" style="display: flex; align-items: center; gap: 8px; text-decoration: none; color: #474A51; font-size: 15px; white-space: nowrap">Autres fiches détaillées <span class="fig" style="font-size: 17px">40</span></a>
+      <a href="#tous" style="display: flex; align-items: center; gap: 8px; text-decoration: none; color: #474A51; font-size: 15px; white-space: nowrap">Les autres lots <span class="fig" style="font-size: 17px">523</span></a>
+    </nav>
+    </div>
+    <div role="toolbar" aria-label="Filtres" style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 12px 0">
+      <label style="position: relative; display: block; flex: 0 1 260px">
+        <span style="position: absolute; left: 12px; top: 11px; color: #6A6E76; display: flex"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span>
+        <input type="search" aria-label="Chercher un lot" placeholder="Marque, modèle, n° de lot" class="ctl" style="width: 100%; padding-left: 38px; cursor: text">
+      </label>
+      <button type="button" class="ctl">Budget <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></button>
+      <button type="button" class="ctl">Énergie <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></button>
+      <button type="button" class="ctl">Boîte <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></button>
+      <button type="button" class="ctl">Kilométrage <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></button>
+      <button type="button" class="ctl">Année <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></button>
+      <button type="button" class="ctl">Contrôle technique <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></button>
+      <span style="flex: 1"></span>
+      <label style="display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: #474A51">Trier par
+        <select class="ctl" style="padding-right: 8px"><option>Note</option><option>Coût total croissant</option><option>Kilométrage</option><option>N° de lot</option></select>
+      </label>
+    </div>
+  </div>
+</div>
+
+<div class="wrap" style="padding-top: 32px; padding-bottom: 64px">
+  <div style="display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start">
+
+    <!-- ===== Liste ===== -->
+    <main style="flex: 999 1 600px; min-width: 0; display: flex; flex-direction: column; gap: 48px">
+
+      <section id="selection" aria-labelledby="h-sel">
+        <div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 6px">
+          <h2 id="h-sel" style="margin: 0; font-size: 28px; font-weight: 750; letter-spacing: -0.01em">À regarder d’abord</h2>
+          <span class="fig" style="font-size: 26px; color: #6A6E76">10</span>
+        </div>
+        <p style="margin: 0 0 20px; font-size: 15px; color: #474A51; max-width: 46em">Les mieux notés selon nos critères de fiabilité et d’état. Provisoire tant que les prix ne sont pas comparés.</p>
+
+        <div class="thead lbl" aria-hidden="true"><span>Lot</span><span>Véhicule</span><span class="c-ct">Contrôle technique</span><span style="text-align: right">Coût total estimé</span><span class="c-sc" style="text-align: right">Note</span></div>
+
+        
+          <a href="#lot-751" class="row" aria-current="false" style="background: transparent">
+            <span class="tag">751</span>
+            <span style="display: flex; flex-direction: column; gap: 3px; min-width: 0">
+              <span style="font-size: 16.5px; font-weight: 650; line-height: 1.25">MINI Hatch 5 portes F55 LCI</span>
+              <span style="font-size: 14px; color: #474A51">Cooper 136 ch Finition Business</span>
+              <span style="font-size: 14px; color: #121316; font-variant-numeric: tabular-nums">2019 · 89 569 km · Essence · Manuelle</span>
+              
+            </span>
+            <span class="c-ct" style="display: flex; gap: 10px; align-items: flex-start">
+              <span class="fp" aria-hidden="true"><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span></span>
+              <span style="display: flex; flex-direction: column; gap: 2px; font-size: 13.5px; line-height: 1.25"><span style="font-weight: 650; color: #146C43">Favorable</span><span style="color: #474A51">aucune défaillance</span></span>
+            </span>
+            <span style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px; text-align: right"><span class="fig" style="font-size: 23px; line-height: 1">10 182 €</span><span style="font-size: 12.5px; color: #474A51">mise à prix 8 900 €</span></span>
+            <span class="c-sc" style="display: flex; flex-direction: column; align-items: center; gap: 3px"><span class="ring" style="width: 48px; height: 48px"><svg width="48" height="48" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="20" fill="none" stroke="#ECECE7" stroke-width="5"></circle><circle cx="24" cy="24" r="20" fill="none" stroke="#A87C00" stroke-width="5" stroke-linecap="round" stroke-dasharray="99.3 200"></circle></svg><span class="rn" style="font-size: 19px" aria-label="Note 79 sur 100">79</span></span><span style="font-size: 11.5px; font-weight: 600; color: #7A5A00">correct</span></span>
+          </a>
+        
+          <a href="#lot-553" class="row" aria-current="false" style="background: transparent">
+            <span class="tag">553</span>
+            <span style="display: flex; flex-direction: column; gap: 3px; min-width: 0">
+              <span style="font-size: 16.5px; font-weight: 650; line-height: 1.25">Dacia Duster</span>
+              <span style="font-size: 14px; color: #474A51">TCe 130 FAP 4x2 Prestige</span>
+              <span style="font-size: 14px; color: #121316; font-variant-numeric: tabular-nums">2019 · 39 859 km · Essence · Manuelle</span>
+              
+            </span>
+            <span class="c-ct" style="display: flex; gap: 10px; align-items: flex-start">
+              <span class="fp" aria-hidden="true"><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span></span>
+              <span style="display: flex; flex-direction: column; gap: 2px; font-size: 13.5px; line-height: 1.25"><span style="font-weight: 650; color: #146C43">Favorable</span><span style="color: #474A51">aucune défaillance</span></span>
+            </span>
+            <span style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px; text-align: right"><span class="fig" style="font-size: 23px; line-height: 1">10 525 €</span><span style="font-size: 12.5px; color: #474A51">prix affiché 9 200 €</span></span>
+            <span class="c-sc" style="display: flex; flex-direction: column; align-items: center; gap: 3px"><span class="ring" style="width: 48px; height: 48px"><svg width="48" height="48" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="20" fill="none" stroke="#ECECE7" stroke-width="5"></circle><circle cx="24" cy="24" r="20" fill="none" stroke="#A87C00" stroke-width="5" stroke-linecap="round" stroke-dasharray="99.3 200"></circle></svg><span class="rn" style="font-size: 19px" aria-label="Note 79 sur 100">79</span></span><span style="font-size: 11.5px; font-weight: 600; color: #7A5A00">correct</span></span>
+          </a>
+        
+          <a href="#lot-538" class="row" aria-current="true" style="background: #FFF6CC">
+            <span class="tag">538</span>
+            <span style="display: flex; flex-direction: column; gap: 3px; min-width: 0">
+              <span style="font-size: 16.5px; font-weight: 650; line-height: 1.25">Citroën C3</span>
+              <span style="font-size: 14px; color: #474A51">PureTech 83 S&amp;S BVM5 You!</span>
+              <span style="font-size: 14px; color: #121316; font-variant-numeric: tabular-nums">2022 · 36 785 km · Essence · Manuelle</span>
+              
+                <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; color: #8A5A00; margin-top: 3px"><span style="width: 7px; height: 7px; background: #8A5A00; transform: rotate(45deg); flex: none"></span>TVA non récupérable incluse : 1 060 €</span>
+              
+            </span>
+            <span class="c-ct" style="display: flex; gap: 10px; align-items: flex-start">
+              <span class="fp" aria-hidden="true"><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc fc-n"></span><span class="fc fc-n"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span></span>
+              <span style="display: flex; flex-direction: column; gap: 2px; font-size: 13.5px; line-height: 1.25"><span style="font-weight: 650; color: #146C43">Favorable</span><span style="color: #474A51">2 mineures</span></span>
+            </span>
+            <span style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px; text-align: right"><span class="fig" style="font-size: 23px; line-height: 1">7 123 €</span><span style="font-size: 12.5px; color: #474A51">5 300 € HT + TVA</span></span>
+            <span class="c-sc" style="display: flex; flex-direction: column; align-items: center; gap: 3px"><span class="ring" style="width: 48px; height: 48px"><svg width="48" height="48" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="20" fill="none" stroke="#ECECE7" stroke-width="5"></circle><circle cx="24" cy="24" r="20" fill="none" stroke="#A87C00" stroke-width="5" stroke-linecap="round" stroke-dasharray="98.0 200"></circle></svg><span class="rn" style="font-size: 19px" aria-label="Note 78 sur 100">78</span></span><span style="font-size: 11.5px; font-weight: 600; color: #7A5A00">correct</span></span>
+          </a>
+        
+          <a href="#lot-906" class="row" aria-current="false" style="background: transparent">
+            <span class="tag">906</span>
+            <span style="display: flex; flex-direction: column; gap: 3px; min-width: 0">
+              <span style="font-size: 16.5px; font-weight: 650; line-height: 1.25">Hyundai Bayon</span>
+              <span style="font-size: 14px; color: #474A51">1.0 T-GDi 100 Hybrid 48V Initia</span>
+              <span style="font-size: 14px; color: #121316; font-variant-numeric: tabular-nums">2021 · 94 025 km · Hybride · Manuelle</span>
+              
+            </span>
+            <span class="c-ct" style="display: flex; gap: 10px; align-items: flex-start">
+              <span class="fp" aria-hidden="true"><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc fc-n"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span></span>
+              <span style="display: flex; flex-direction: column; gap: 2px; font-size: 13.5px; line-height: 1.25"><span style="font-weight: 650; color: #146C43">Favorable</span><span style="color: #474A51">1 mineure</span></span>
+            </span>
+            <span style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px; text-align: right"><span class="fig" style="font-size: 23px; line-height: 1">8 237 €</span><span style="font-size: 12.5px; color: #474A51">mise à prix 7 200 €</span></span>
+            <span class="c-sc" style="display: flex; flex-direction: column; align-items: center; gap: 3px"><span class="ring" style="width: 48px; height: 48px"><svg width="48" height="48" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="20" fill="none" stroke="#ECECE7" stroke-width="5"></circle><circle cx="24" cy="24" r="20" fill="none" stroke="#A87C00" stroke-width="5" stroke-linecap="round" stroke-dasharray="98.0 200"></circle></svg><span class="rn" style="font-size: 19px" aria-label="Note 78 sur 100">78</span></span><span style="font-size: 11.5px; font-weight: 600; color: #7A5A00">correct</span></span>
+          </a>
+        
+          <a href="#lot-622" class="row" aria-current="false" style="background: transparent">
+            <span class="tag">622</span>
+            <span style="display: flex; flex-direction: column; gap: 3px; min-width: 0">
+              <span style="font-size: 16.5px; font-weight: 650; line-height: 1.25">Land Rover Range Rover Evoque</span>
+              <span style="font-size: 14px; color: #474A51">TD4 150 BVA SE</span>
+              <span style="font-size: 14px; color: #121316; font-variant-numeric: tabular-nums">2017 · 115 166 km · Diesel · Automatique</span>
+              
+            </span>
+            <span class="c-ct" style="display: flex; gap: 10px; align-items: flex-start">
+              <span class="fp" aria-hidden="true"><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc fc-n"></span><span class="fc"></span><span class="fc"></span></span>
+              <span style="display: flex; flex-direction: column; gap: 2px; font-size: 13.5px; line-height: 1.25"><span style="font-weight: 650; color: #146C43">Favorable</span><span style="color: #474A51">1 mineure</span></span>
+            </span>
+            <span style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px; text-align: right"><span class="fig" style="font-size: 23px; line-height: 1">8 923 €</span><span style="font-size: 12.5px; color: #474A51">mise à prix 7 800 €</span></span>
+            <span class="c-sc" style="display: flex; flex-direction: column; align-items: center; gap: 3px"><span class="ring" style="width: 48px; height: 48px"><svg width="48" height="48" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="20" fill="none" stroke="#ECECE7" stroke-width="5"></circle><circle cx="24" cy="24" r="20" fill="none" stroke="#A87C00" stroke-width="5" stroke-linecap="round" stroke-dasharray="98.0 200"></circle></svg><span class="rn" style="font-size: 19px" aria-label="Note 78 sur 100">78</span></span><span style="font-size: 11.5px; font-weight: 600; color: #7A5A00">correct</span></span>
+          </a>
+        
+          <a href="#lot-993" class="row" aria-current="false" style="background: transparent">
+            <span class="tag">993</span>
+            <span style="display: flex; flex-direction: column; gap: 3px; min-width: 0">
+              <span style="font-size: 16.5px; font-weight: 650; line-height: 1.25">Renault Captur</span>
+              <span style="font-size: 14px; color: #474A51">TCe 130 FAP Business</span>
+              <span style="font-size: 14px; color: #121316; font-variant-numeric: tabular-nums">2020 · 77 556 km · Essence · Manuelle</span>
+              
+            </span>
+            <span class="c-ct" style="display: flex; gap: 10px; align-items: flex-start">
+              <span class="fp" aria-hidden="true"><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc fc-n"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span></span>
+              <span style="display: flex; flex-direction: column; gap: 2px; font-size: 13.5px; line-height: 1.25"><span style="font-weight: 650; color: #146C43">Favorable</span><span style="color: #474A51">1 mineure</span></span>
+            </span>
+            <span style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px; text-align: right"><span class="fig" style="font-size: 23px; line-height: 1">10 410 €</span><span style="font-size: 12.5px; color: #474A51">mise à prix 9 100 €</span></span>
+            <span class="c-sc" style="display: flex; flex-direction: column; align-items: center; gap: 3px"><span class="ring" style="width: 48px; height: 48px"><svg width="48" height="48" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="20" fill="none" stroke="#ECECE7" stroke-width="5"></circle><circle cx="24" cy="24" r="20" fill="none" stroke="#A87C00" stroke-width="5" stroke-linecap="round" stroke-dasharray="98.0 200"></circle></svg><span class="rn" style="font-size: 19px" aria-label="Note 78 sur 100">78</span></span><span style="font-size: 11.5px; font-weight: 600; color: #7A5A00">correct</span></span>
+          </a>
+        
+          <a href="#lot-1070" class="row" aria-current="false" style="background: transparent">
+            <span class="tag">1070</span>
+            <span style="display: flex; flex-direction: column; gap: 3px; min-width: 0">
+              <span style="font-size: 16.5px; font-weight: 650; line-height: 1.25">DS 7 Crossback</span>
+              <span style="font-size: 14px; color: #474A51">BlueHDi 180 EAT8 Executive</span>
+              <span style="font-size: 14px; color: #121316; font-variant-numeric: tabular-nums">2018 · 124 761 km · Diesel · Automatique</span>
+              
+            </span>
+            <span class="c-ct" style="display: flex; gap: 10px; align-items: flex-start">
+              <span class="fp" aria-hidden="true"><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc fc-n"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span></span>
+              <span style="display: flex; flex-direction: column; gap: 2px; font-size: 13.5px; line-height: 1.25"><span style="font-weight: 650; color: #146C43">Favorable</span><span style="color: #474A51">1 mineure</span></span>
+            </span>
+            <span style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px; text-align: right"><span class="fig" style="font-size: 23px; line-height: 1">12 012 €</span><span style="font-size: 12.5px; color: #474A51">mise à prix 10 500 €</span></span>
+            <span class="c-sc" style="display: flex; flex-direction: column; align-items: center; gap: 3px"><span class="ring" style="width: 48px; height: 48px"><svg width="48" height="48" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="20" fill="none" stroke="#ECECE7" stroke-width="5"></circle><circle cx="24" cy="24" r="20" fill="none" stroke="#A87C00" stroke-width="5" stroke-linecap="round" stroke-dasharray="98.0 200"></circle></svg><span class="rn" style="font-size: 19px" aria-label="Note 78 sur 100">78</span></span><span style="font-size: 11.5px; font-weight: 600; color: #7A5A00">correct</span></span>
+          </a>
+        
+          <a href="#lot-1075" class="row" aria-current="false" style="background: transparent">
+            <span class="tag">1075</span>
+            <span style="display: flex; flex-direction: column; gap: 3px; min-width: 0">
+              <span style="font-size: 16.5px; font-weight: 650; line-height: 1.25">Audi A3 Sportback</span>
+              <span style="font-size: 14px; color: #474A51">35 TFSI COD 150 S tronic 7</span>
+              <span style="font-size: 14px; color: #121316; font-variant-numeric: tabular-nums">2019 · 111 219 km · Essence · Automatique</span>
+              
+            </span>
+            <span class="c-ct" style="display: flex; gap: 10px; align-items: flex-start">
+              <span class="fp" aria-hidden="true"><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc fc-n"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span></span>
+              <span style="display: flex; flex-direction: column; gap: 2px; font-size: 13.5px; line-height: 1.25"><span style="font-weight: 650; color: #146C43">Favorable</span><span style="color: #474A51">1 mineure</span></span>
+            </span>
+            <span style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px; text-align: right"><span class="fig" style="font-size: 23px; line-height: 1">12 241 €</span><span style="font-size: 12.5px; color: #474A51">mise à prix 10 700 €</span></span>
+            <span class="c-sc" style="display: flex; flex-direction: column; align-items: center; gap: 3px"><span class="ring" style="width: 48px; height: 48px"><svg width="48" height="48" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="20" fill="none" stroke="#ECECE7" stroke-width="5"></circle><circle cx="24" cy="24" r="20" fill="none" stroke="#A87C00" stroke-width="5" stroke-linecap="round" stroke-dasharray="98.0 200"></circle></svg><span class="rn" style="font-size: 19px" aria-label="Note 78 sur 100">78</span></span><span style="font-size: 11.5px; font-weight: 600; color: #7A5A00">correct</span></span>
+          </a>
+        
+          <a href="#lot-1006" class="row" aria-current="false" style="background: transparent">
+            <span class="tag">1006</span>
+            <span style="display: flex; flex-direction: column; gap: 3px; min-width: 0">
+              <span style="font-size: 16.5px; font-weight: 650; line-height: 1.25">Renault Clio V</span>
+              <span style="font-size: 14px; color: #474A51">TCe 90 Evolution</span>
+              <span style="font-size: 14px; color: #121316; font-variant-numeric: tabular-nums">2022 · 21 783 km · Essence · Manuelle</span>
+              
+                <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; color: #8A5A00; margin-top: 3px"><span style="width: 7px; height: 7px; background: #8A5A00; transform: rotate(45deg); flex: none"></span>TVA non récupérable incluse : 1 860 €</span>
+              
+            </span>
+            <span class="c-ct" style="display: flex; gap: 10px; align-items: flex-start">
+              <span class="fp" aria-hidden="true"><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc fc-n"></span><span class="fc"></span><span class="fc"></span></span>
+              <span style="display: flex; flex-direction: column; gap: 2px; font-size: 13.5px; line-height: 1.25"><span style="font-weight: 650; color: #146C43">Favorable</span><span style="color: #474A51">2 mineures</span></span>
+            </span>
+            <span style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px; text-align: right"><span class="fig" style="font-size: 23px; line-height: 1">12 499 €</span><span style="font-size: 12.5px; color: #474A51">9 300 € HT + TVA</span></span>
+            <span class="c-sc" style="display: flex; flex-direction: column; align-items: center; gap: 3px"><span class="ring" style="width: 48px; height: 48px"><svg width="48" height="48" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="20" fill="none" stroke="#ECECE7" stroke-width="5"></circle><circle cx="24" cy="24" r="20" fill="none" stroke="#A87C00" stroke-width="5" stroke-linecap="round" stroke-dasharray="98.0 200"></circle></svg><span class="rn" style="font-size: 19px" aria-label="Note 78 sur 100">78</span></span><span style="font-size: 11.5px; font-weight: 600; color: #7A5A00">correct</span></span>
+          </a>
+        
+          <a href="#lot-810" class="row" aria-current="false" style="background: transparent">
+            <span class="tag">810</span>
+            <span style="display: flex; flex-direction: column; gap: 3px; min-width: 0">
+              <span style="font-size: 16.5px; font-weight: 650; line-height: 1.25">DS 7 Crossback</span>
+              <span style="font-size: 14px; color: #474A51">PureTech 180 EAT8 Grand Chic</span>
+              <span style="font-size: 14px; color: #121316; font-variant-numeric: tabular-nums">2018 · 105 519 km · Essence · Automatique</span>
+              
+            </span>
+            <span class="c-ct" style="display: flex; gap: 10px; align-items: flex-start">
+              <span class="fp" aria-hidden="true"><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc fc-n"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span></span>
+              <span style="display: flex; flex-direction: column; gap: 2px; font-size: 13.5px; line-height: 1.25"><span style="font-weight: 650; color: #146C43">Favorable</span><span style="color: #474A51">1 mineure</span></span>
+            </span>
+            <span style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px; text-align: right"><span class="fig" style="font-size: 23px; line-height: 1">12 813 €</span><span style="font-size: 12.5px; color: #474A51">mise à prix 11 200 €</span></span>
+            <span class="c-sc" style="display: flex; flex-direction: column; align-items: center; gap: 3px"><span class="ring" style="width: 48px; height: 48px"><svg width="48" height="48" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="20" fill="none" stroke="#ECECE7" stroke-width="5"></circle><circle cx="24" cy="24" r="20" fill="none" stroke="#A87C00" stroke-width="5" stroke-linecap="round" stroke-dasharray="98.0 200"></circle></svg><span class="rn" style="font-size: 19px" aria-label="Note 78 sur 100">78</span></span><span style="font-size: 11.5px; font-weight: 600; color: #7A5A00">correct</span></span>
+          </a>
+        
+      </section>
+
+      <section id="autres" aria-labelledby="h-aut">
+        <div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 6px">
+          <h2 id="h-aut" style="margin: 0; font-size: 28px; font-weight: 750; letter-spacing: -0.01em">Autres fiches détaillées</h2>
+          <span class="fig" style="font-size: 26px; color: #6A6E76">40</span>
+        </div>
+        <p style="margin: 0 0 20px; font-size: 15px; color: #474A51; max-width: 46em">Correctes selon nos critères, avec un point à regarder de près.</p>
+        <div class="thead lbl" aria-hidden="true"><span>Lot</span><span>Véhicule</span><span class="c-ct">Contrôle technique</span><span style="text-align: right">Coût total estimé</span><span class="c-sc" style="text-align: right">Note</span></div>
+        
+          <a href="#lot-866" class="row">
+            <span class="tag">866</span>
+            <span style="display: flex; flex-direction: column; gap: 3px; min-width: 0">
+              <span style="font-size: 16.5px; font-weight: 650; line-height: 1.25">Peugeot 308 SW</span>
+              <span style="font-size: 14px; color: #474A51">PHEV 180 e-EAT8 Active Pack</span>
+              <span style="font-size: 14px; font-variant-numeric: tabular-nums">2022 · 75 407 km · Hybride rechargeable · Automatique</span>
+              
+              
+                <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; color: #8A5A00; margin-top: 3px"><span style="width: 7px; height: 7px; background: #B97A0B; transform: rotate(45deg); flex: none"></span>Batterie à 92 % de sa capacité, selon l’annonce</span>
+              
+            </span>
+            <span class="c-ct" style="display: flex; gap: 10px; align-items: flex-start">
+              <span class="fp" aria-hidden="true"><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc fc-n"></span><span class="fc fc-n"></span><span class="fc"></span><span class="fc"></span></span>
+              <span style="display: flex; flex-direction: column; gap: 2px; font-size: 13.5px; line-height: 1.25"><span style="font-weight: 650; color: #146C43">Favorable</span><span style="color: #474A51">2 mineures</span></span>
+            </span>
+            <span style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px; text-align: right"><span class="fig" style="font-size: 23px; line-height: 1">15 322 €</span><span style="font-size: 12.5px; color: #474A51">11 400 € HT + TVA</span></span>
+            <span class="c-sc" style="display: flex; flex-direction: column; align-items: center; gap: 3px"><span class="ring" style="width: 48px; height: 48px"><svg width="48" height="48" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="20" fill="none" stroke="#ECECE7" stroke-width="5"></circle><circle cx="24" cy="24" r="20" fill="none" stroke="#A87C00" stroke-width="5" stroke-linecap="round" stroke-dasharray="96.8 200"></circle></svg><span class="rn" style="font-size: 19px" aria-label="Note 77 sur 100">77</span></span><span style="font-size: 11.5px; font-weight: 600; color: #7A5A00">correct</span></span>
+          </a>
+        
+          <a href="#lot-579" class="row">
+            <span class="tag">579</span>
+            <span style="display: flex; flex-direction: column; gap: 3px; min-width: 0">
+              <span style="font-size: 16.5px; font-weight: 650; line-height: 1.25">Hyundai Tucson</span>
+              <span style="font-size: 14px; color: #474A51">1.6 CRDi 136 Hybrid 48V DCT-7 Executive</span>
+              <span style="font-size: 14px; font-variant-numeric: tabular-nums">2020 · 143 475 km · Hybride · Automatique</span>
+              
+              
+                <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; color: #8A5A00; margin-top: 3px"><span style="width: 7px; height: 7px; background: #B97A0B; transform: rotate(45deg); flex: none"></span>24 028 km par an, au-dessus de la normale</span>
+              
+            </span>
+            <span class="c-ct" style="display: flex; gap: 10px; align-items: flex-start">
+              <span class="fp" aria-hidden="true"><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc fc-n"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span></span>
+              <span style="display: flex; flex-direction: column; gap: 2px; font-size: 13.5px; line-height: 1.25"><span style="font-weight: 650; color: #146C43">Favorable</span><span style="color: #474A51">1 mineure</span></span>
+            </span>
+            <span style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px; text-align: right"><span class="fig" style="font-size: 23px; line-height: 1">12 813 €</span><span style="font-size: 12.5px; color: #474A51">prix affiché 11 200 €</span></span>
+            <span class="c-sc" style="display: flex; flex-direction: column; align-items: center; gap: 3px"><span class="ring" style="width: 48px; height: 48px"><svg width="48" height="48" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="20" fill="none" stroke="#ECECE7" stroke-width="5"></circle><circle cx="24" cy="24" r="20" fill="none" stroke="#A87C00" stroke-width="5" stroke-linecap="round" stroke-dasharray="96.8 200"></circle></svg><span class="rn" style="font-size: 19px" aria-label="Note 77 sur 100">77</span></span><span style="font-size: 11.5px; font-weight: 600; color: #7A5A00">correct</span></span>
+          </a>
+        
+          <a href="#lot-1069" class="row">
+            <span class="tag">1069</span>
+            <span style="display: flex; flex-direction: column; gap: 3px; min-width: 0">
+              <span style="font-size: 16.5px; font-weight: 650; line-height: 1.25">Porsche Panamera</span>
+              <span style="font-size: 14px; color: #474A51">S V6 3.0 380 Hybrid Tiptronic S</span>
+              <span style="font-size: 14px; font-variant-numeric: tabular-nums">2012 · 129 431 km · Hybride · Automatique</span>
+              
+              
+                <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; color: #8A5A00; margin-top: 3px"><span style="width: 7px; height: 7px; background: #B97A0B; transform: rotate(45deg); flex: none"></span>Plus de dix ans</span>
+              
+            </span>
+            <span class="c-ct" style="display: flex; gap: 10px; align-items: flex-start">
+              <span class="fp" aria-hidden="true"><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span></span>
+              <span style="display: flex; flex-direction: column; gap: 2px; font-size: 13.5px; line-height: 1.25"><span style="font-weight: 650; color: #146C43">Favorable</span><span style="color: #474A51">aucune défaillance</span></span>
+            </span>
+            <span style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px; text-align: right"><span class="fig" style="font-size: 23px; line-height: 1">20 020 €</span><span style="font-size: 12.5px; color: #474A51">mise à prix 17 500 €</span></span>
+            <span class="c-sc" style="display: flex; flex-direction: column; align-items: center; gap: 3px"><span class="ring" style="width: 48px; height: 48px"><svg width="48" height="48" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="20" fill="none" stroke="#ECECE7" stroke-width="5"></circle><circle cx="24" cy="24" r="20" fill="none" stroke="#A87C00" stroke-width="5" stroke-linecap="round" stroke-dasharray="94.2 200"></circle></svg><span class="rn" style="font-size: 19px" aria-label="Note 75 sur 100">75</span></span><span style="font-size: 11.5px; font-weight: 600; color: #7A5A00">correct</span></span>
+          </a>
+        
+          <a href="#lot-816" class="row">
+            <span class="tag">816</span>
+            <span style="display: flex; flex-direction: column; gap: 3px; min-width: 0">
+              <span style="font-size: 16.5px; font-weight: 650; line-height: 1.25">Peugeot 208</span>
+              <span style="font-size: 14px; color: #474A51">PureTech 100 S&amp;S BVM6 Style</span>
+              <span style="font-size: 14px; font-variant-numeric: tabular-nums">2021 · 55 209 km · Essence · Manuelle</span>
+              
+                <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; font-weight: 600; color: #A3161F; margin-top: 3px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2 20h20L12 3z"></path><path d="M12 10v4M12 17h.01"></path></svg>Moteur à risque connu : 1.2 PureTech, courroie «&nbsp;humide&nbsp;»</span>
+              
+              
+            </span>
+            <span class="c-ct" style="display: flex; gap: 10px; align-items: flex-start">
+              <span class="fp" aria-hidden="true"><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc"></span><span class="fc fc-n"></span><span class="fc"></span><span class="fc"></span></span>
+              <span style="display: flex; flex-direction: column; gap: 2px; font-size: 13.5px; line-height: 1.25"><span style="font-weight: 650; color: #146C43">Favorable</span><span style="color: #474A51">1 mineure</span></span>
+            </span>
+            <span style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px; text-align: right"><span class="fig" style="font-size: 23px; line-height: 1">5 262 €</span><span style="font-size: 12.5px; color: #474A51">mise à prix 4 600 €</span></span>
+            <span class="c-sc" style="display: flex; flex-direction: column; align-items: center; gap: 3px"><span class="ring" style="width: 48px; height: 48px"><svg width="48" height="48" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="20" fill="none" stroke="#ECECE7" stroke-width="5"></circle><circle cx="24" cy="24" r="20" fill="none" stroke="#D9620F" stroke-width="5" stroke-linecap="round" stroke-dasharray="86.7 200"></circle></svg><span class="rn" style="font-size: 19px" aria-label="Note 69 sur 100">69</span></span><span style="font-size: 11.5px; font-weight: 600; color: #B4470B">correct</span></span>
+          </a>
+        
+        <div style="padding-top: 16px"><button type="button" class="btn-g">Afficher les 36 autres fiches</button></div>
+      </section>
+
+      <section id="tous" aria-labelledby="h-tous">
+        <div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 6px">
+          <h2 id="h-tous" style="margin: 0; font-size: 28px; font-weight: 750; letter-spacing: -0.01em">Les autres lots</h2>
+          <span class="fig" style="font-size: 26px; color: #6A6E76">523</span>
+        </div>
+        <p style="margin: 0 0 20px; font-size: 15px; color: #474A51; max-width: 46em">Une ligne par lot, avec la raison principale de sa note. Toujours consultables : l’annonce reste chez Alcopa.</p>
+        <div class="thead lbl" aria-hidden="true"><span>Lot</span><span>Véhicule</span><span class="c-ct">Contrôle technique</span><span style="text-align: right">Coût total estimé</span><span class="c-sc" style="text-align: right">Note</span></div>
+        
+          <a href="#lot-501" class="crow">
+            <span class="tag tag-o" style="font-size: 17px; height: 26px">501</span>
+            <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0">
+              <span style="font-size: 15px; font-weight: 600">Renault Arkana <span style="font-weight: 400; color: #474A51; font-variant-numeric: tabular-nums">· 2023 · 155 108 km</span></span>
+              <span style="font-size: 13.5px; color: #474A51">50 993 km par an, au-dessus de la normale</span>
+            </span>
+            <span class="c-ct" style="display: inline-flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; color: #474A51"><span style="width: 10px; height: 10px; border-radius: 2px; background: transparent; flex: none; box-sizing: border-box; border: 1px dashed #6A6E76"></span>Pas de CT lisible</span>
+            <span class="fig" style="font-size: 19px; text-align: right">11 693 €</span>
+            <span class="c-sc" style="display: flex; justify-content: center"><span class="ring" style="width: 36px; height: 36px"><svg width="36" height="36" viewBox="0 0 36 36" aria-hidden="true"><circle cx="18" cy="18" r="15" fill="none" stroke="#ECECE7" stroke-width="4"></circle><circle cx="18" cy="18" r="15" fill="none" stroke="#D9620F" stroke-width="4" stroke-linecap="round" stroke-dasharray="64.1 200"></circle></svg><span class="rn" style="font-size: 15px" aria-label="Note 68 sur 100">68</span></span></span>
+          </a>
+        
+          <a href="#lot-506" class="crow">
+            <span class="tag tag-o" style="font-size: 17px; height: 26px">506</span>
+            <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0">
+              <span style="font-size: 15px; font-weight: 600">Peugeot 2008 <span style="font-weight: 400; color: #474A51; font-variant-numeric: tabular-nums">· 2021 · 114 622 km</span></span>
+              <span style="font-size: 13.5px; color: #474A51">Moteur à risque connu : 1.5 BlueHDi, chaîne d’arbres à cames</span>
+            </span>
+            <span class="c-ct" style="display: inline-flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; color: #B4470B"><span style="width: 10px; height: 10px; border-radius: 2px; background: #E26A16; flex: none; box-sizing: border-box; border: 0"></span>Défavorable · majeure</span>
+            <span class="fig" style="font-size: 19px; text-align: right">9 631 €</span>
+            <span class="c-sc" style="display: flex; justify-content: center"><span class="ring" style="width: 36px; height: 36px"><svg width="36" height="36" viewBox="0 0 36 36" aria-hidden="true"><circle cx="18" cy="18" r="15" fill="none" stroke="#ECECE7" stroke-width="4"></circle><circle cx="18" cy="18" r="15" fill="none" stroke="#C8202F" stroke-width="4" stroke-linecap="round" stroke-dasharray="54.7 200"></circle></svg><span class="rn" style="font-size: 15px" aria-label="Note 58 sur 100">58</span></span></span>
+          </a>
+        
+          <a href="#lot-507" class="crow">
+            <span class="tag tag-o" style="font-size: 17px; height: 26px">507</span>
+            <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0">
+              <span style="font-size: 15px; font-weight: 600">Renault Captur <span style="font-weight: 400; color: #474A51; font-variant-numeric: tabular-nums">· 2022 · 152 531 km</span></span>
+              <span style="font-size: 13.5px; color: #474A51">CT défavorable : 1 défaillance majeure</span>
+            </span>
+            <span class="c-ct" style="display: inline-flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; color: #B4470B"><span style="width: 10px; height: 10px; border-radius: 2px; background: #E26A16; flex: none; box-sizing: border-box; border: 0"></span>Défavorable · majeure</span>
+            <span class="fig" style="font-size: 19px; text-align: right">6 432 €</span>
+            <span class="c-sc" style="display: flex; justify-content: center"><span class="ring" style="width: 36px; height: 36px"><svg width="36" height="36" viewBox="0 0 36 36" aria-hidden="true"><circle cx="18" cy="18" r="15" fill="none" stroke="#ECECE7" stroke-width="4"></circle><circle cx="18" cy="18" r="15" fill="none" stroke="#C8202F" stroke-width="4" stroke-linecap="round" stroke-dasharray="53.7 200"></circle></svg><span class="rn" style="font-size: 15px" aria-label="Note 57 sur 100">57</span></span></span>
+          </a>
+        
+          <a href="#lot-509" class="crow">
+            <span class="tag tag-o" style="font-size: 17px; height: 26px">509</span>
+            <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0">
+              <span style="font-size: 15px; font-weight: 600">Renault Mégane IV Berline <span style="font-weight: 400; color: #474A51; font-variant-numeric: tabular-nums">· 2022 · 165 809 km</span></span>
+              <span style="font-size: 13.5px; color: #474A51">CT défavorable : 2 défaillances majeures</span>
+            </span>
+            <span class="c-ct" style="display: inline-flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; color: #B4470B"><span style="width: 10px; height: 10px; border-radius: 2px; background: #E26A16; flex: none; box-sizing: border-box; border: 0"></span>Défavorable · majeure</span>
+            <span class="fig" style="font-size: 19px; text-align: right">9 102 €</span>
+            <span class="c-sc" style="display: flex; justify-content: center"><span class="ring" style="width: 36px; height: 36px"><svg width="36" height="36" viewBox="0 0 36 36" aria-hidden="true"><circle cx="18" cy="18" r="15" fill="none" stroke="#ECECE7" stroke-width="4"></circle><circle cx="18" cy="18" r="15" fill="none" stroke="#C8202F" stroke-width="4" stroke-linecap="round" stroke-dasharray="52.8 200"></circle></svg><span class="rn" style="font-size: 15px" aria-label="Note 56 sur 100">56</span></span></span>
+          </a>
+        
+        <div style="padding-top: 16px"><button type="button" class="btn-g">Afficher les 523 lots</button></div>
+      </section>
+
+      <footer id="details" style="border-top: 2px solid #121316; padding-top: 24px; display: flex; flex-direction: column; gap: 14px; font-size: 14px; color: #474A51">
+        <div style="display: flex; flex-wrap: wrap; gap: 8px 24px"><a href="about.html">Méthode</a><span>Mentions légales</span><span>Conditions d’utilisation</span><span>Confidentialité</span><span>Contact</span><span class="mono" style="font-size: 12px; color: #6A6E76">en préparation</span></div>
+        <p style="margin: 0; max-width: 60em">Auction France est un second avis indépendant, gratuit, sans lien avec Alcopa. Les annonces, les photos et les conditions de vente restent sur le site de la maison de vente. Analyse automatique : elle peut contenir des erreurs, vérifiez sur place avant d’enchérir.</p>
+        <details><summary style="cursor: pointer; color: #121316">Détails de l’analyse</summary><p class="mono" style="font-size: 12px; margin: 8px 0 0">Collecte complète · 573 lots · 564 PV lus, 9 absents ou illisibles · avis IA désactivé · seuils : correct ≥ 60, favorable ≥ 80</p></details>
+      </footer>
+    </main>
+
+    <!-- ===== Fiche du lot 538 ===== -->
+    <aside aria-labelledby="sheet-title" style="flex: 1 1 460px; max-width: 520px; min-width: 0; position: sticky; top: 132px; background: #FFFFFF; border: 1px solid #DEDED8; border-radius: 6px; box-shadow: 0 1px 2px rgba(18, 19, 22, 0.05), 0 12px 32px rgba(18, 19, 22, 0.07)">
+
+      <div style="padding: 24px 28px 20px; display: flex; flex-direction: column; gap: 16px">
+        <div style="display: flex; align-items: center; gap: 12px">
+          <span class="tag" style="font-size: 24px; height: 36px; min-width: 64px">538</span>
+          <span class="mono" style="font-size: 12px; color: #474A51; line-height: 1.4">Alcopa · Beauvais<br>lundi 9 novembre</span>
+          <span style="flex: 1"></span>
+          <button type="button" aria-label="Fermer la fiche" style="width: 44px; height: 44px; border: 1px solid #DEDED8; border-radius: 4px; background: #FFFFFF; color: #121316; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button>
+        </div>
+        <div>
+          <h2 id="sheet-title" tabindex="-1" style="margin: 0; font-size: 30px; line-height: 1.05; font-weight: 800; font-stretch: 108%; letter-spacing: -0.015em">Citroën C3</h2>
+          <p style="margin: 6px 0 0; font-size: 15px; color: #474A51">PureTech 83 S&amp;S BVM5 You!</p>
+        </div>
+        <dl style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; margin: 0; border-top: 1px solid #DEDED8; border-bottom: 1px solid #DEDED8">
+          <div style="padding: 10px 0"><dt class="lbl" style="color: #6A6E76; font-size: 10px">Année</dt><dd class="fig" style="margin: 4px 0 0; font-size: 20px">2022</dd></div>
+          <div style="padding: 10px 0 10px 12px; border-left: 1px solid #ECECE7"><dt class="lbl" style="color: #6A6E76; font-size: 10px">Km</dt><dd class="fig" style="margin: 4px 0 0; font-size: 20px">36 785</dd></div>
+          <div style="padding: 10px 0 10px 12px; border-left: 1px solid #ECECE7"><dt class="lbl" style="color: #6A6E76; font-size: 10px">Énergie</dt><dd style="margin: 6px 0 0; font-size: 15px; font-weight: 600">Essence</dd></div>
+          <div style="padding: 10px 0 10px 12px; border-left: 1px solid #ECECE7"><dt class="lbl" style="color: #6A6E76; font-size: 10px">Boîte</dt><dd style="margin: 6px 0 0; font-size: 15px; font-weight: 600">Manuelle</dd></div>
+        </dl>
+        <a class="btn-p" href="https://www.alcopa-auction.fr/" target="_blank" rel="noopener noreferrer nofollow">Voir l’annonce sur Alcopa <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"></path></svg><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">(nouvel onglet)</span></a>
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap">
+          <span style="font-size: 13px; color: #6A6E76">Photos, enchères et conditions de vente sur l’annonce.</span>
+          <button type="button" class="btn-g" style="height: 36px; font-size: 13px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1"></path><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1"></path></svg>Copier le lien</button>
+        </div>
+      </div>
+
+      <section class="pane-sec" aria-labelledby="s-bref" style="display: flex; flex-direction: column; gap: 16px">
+        <h3 id="s-bref" class="lbl" style="margin: 0; color: #474A51">En bref</h3>
+        <div style="display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap">
+          <ul style="list-style: none; margin: 0; padding: 0; flex: 1 1 200px; display: flex; flex-direction: column; gap: 10px; font-size: 15px; line-height: 1.4">
+            <li style="display: flex; gap: 10px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#146C43" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none; margin-top: 1px"><path d="m5 12 5 5 9-10"></path></svg><span>CT favorable, 2 défaillances mineures <span class="mono" style="font-size: 11px; color: #6A6E76">PV CT</span></span></li>
+            <li style="display: flex; gap: 10px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#146C43" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none; margin-top: 1px"><path d="m5 12 5 5 9-10"></path></svg><span>Kilométrage modéré : 8 108 km par an <span class="mono" style="font-size: 11px; color: #6A6E76">annonce</span></span></li>
+            <li style="display: flex; gap: 10px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#146C43" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none; margin-top: 1px"><path d="m5 12 5 5 9-10"></path></svg><span>Garantie mécanique incluse, formule non précisée <span class="mono" style="font-size: 11px; color: #6A6E76">annonce</span></span></li>
+            <li style="display: flex; gap: 10px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6A6E76" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none; margin-top: 1px"><circle cx="12" cy="12" r="9"></circle><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5V14M12 17h.01"></path></svg><span><strong style="font-weight: 650">À vérifier :</strong> la durée et la couverture de la garantie ; la carrosserie et l’intérieur sur les photos de l’annonce.</span></li>
+          </ul>
+          <div style="flex: 0 0 168px; border: 1px solid #DEDED8; border-radius: 4px; padding: 14px; display: flex; flex-direction: column; gap: 10px">
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 6px">
+              <span class="ring" style="width: 104px; height: 104px"><svg width="104" height="104" viewBox="0 0 104 104" aria-hidden="true"><circle cx="52" cy="52" r="44" fill="none" stroke="#ECECE7" stroke-width="9"></circle><circle cx="52" cy="52" r="44" fill="none" stroke="#A87C00" stroke-width="9" stroke-linecap="round" stroke-dasharray="215.6 400"></circle></svg><span class="rn" style="flex-direction: column; line-height: 1"><span style="font-size: 40px">78</span><span style="font-size: 12px; font-weight: 500; font-stretch: 100%; color: #6A6E76">/100</span></span></span>
+              <span style="font-size: 13px; font-weight: 650; color: #7A5A00">Profil correct</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 7px; font-size: 12px; color: #474A51">
+              <div><div style="display: flex; justify-content: space-between"><span>Fiabilité</span><span class="fig" style="font-size: 13px; color: #121316">87</span></div><div style="height: 4px; background: #ECECE7; margin-top: 3px"><div style="width: 87%; height: 4px; background: #121316"></div></div></div>
+              <div><div style="display: flex; justify-content: space-between"><span>État</span><span class="fig" style="font-size: 13px; color: #121316">93</span></div><div style="height: 4px; background: #ECECE7; margin-top: 3px"><div style="width: 93%; height: 4px; background: #121316"></div></div></div>
+              <div><div style="display: flex; justify-content: space-between"><span>Prix</span><span style="font-size: 11px">non comparé</span></div><div class="hatch" style="height: 4px; margin-top: 3px"></div></div>
+            </div>
+          </div>
+        </div>
+        <p style="margin: 0; font-size: 12.5px; line-height: 1.45; color: #6A6E76">Note selon nos critères : fiabilité 35 %, état 35 %, prix 30 %. Le prix n’étant pas encore comparé, il compte pour 50, une valeur neutre. Anneau vert dès 80 (favorable), jaune de 70 à 79, orange de 60 à 69, rouge sous 60 (risque élevé).</p>
+        <p style="margin: 0; padding: 10px 12px; background: #F7F7F4; border-radius: 4px; font-size: 13.5px; color: #474A51; display: flex; gap: 8px; align-items: center"><span style="width: 8px; height: 8px; border: 1.5px solid #6A6E76; border-radius: 50%; box-sizing: border-box; flex: none"></span>Pas d’avis IA cette semaine : cette fiche vient de nos règles seules.</p>
+      </section>
+
+      <section class="pane-sec" aria-labelledby="s-cout" style="display: flex; flex-direction: column; gap: 14px">
+        <h3 id="s-cout" class="lbl" style="margin: 0; color: #474A51">Coût total estimé</h3>
+        <div style="display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap"><span class="fig" style="font-size: 44px; line-height: 0.9">7 123 €</span><span style="font-size: 14px; color: #474A51">à la mise à prix de 5 300 € HT</span></div>
+        <div role="img" aria-label="Composition : mise à prix 74 %, TVA non récupérable 15 %, frais acheteur 11 %." style="display: flex; height: 12px; gap: 2px">
+          <div style="flex: 5300; background: #121316"></div><div style="flex: 1060; background: #6A6E76"></div><div style="flex: 763; background: #B5B8B1"></div>
+        </div>
+        <dl style="margin: 0; display: flex; flex-direction: column; font-size: 14px">
+          <div style="display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid #ECECE7"><dt style="display: flex; align-items: center; gap: 8px"><span class="sw" style="background: #121316"></span>Mise à prix (HT)</dt><dd class="fig" style="margin: 0; font-size: 16px">5 300 €</dd></div>
+          <div style="display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid #ECECE7"><dt style="display: flex; align-items: center; gap: 8px"><span class="sw" style="background: #6A6E76"></span>TVA non récupérable, 20 %</dt><dd class="fig" style="margin: 0; font-size: 16px">1 060 €</dd></div>
+          <div style="display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid #ECECE7"><dt style="display: flex; align-items: center; gap: 8px"><span class="sw" style="background: #B5B8B1"></span>Frais acheteur, 14,4 % (min. 360 €)</dt><dd class="fig" style="margin: 0; font-size: 16px">763 €</dd></div>
+          <div style="display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid #ECECE7; color: #474A51"><dt style="display: flex; align-items: center; gap: 8px"><span class="sw" style="border: 1px dashed #8E9198"></span>Réparations demandées par le CT</dt><dd class="fig" style="margin: 0; font-size: 16px">0 €</dd></div>
+        </dl>
+        <p style="margin: 0; font-size: 12.5px; color: #6A6E76">Hors carte grise, transport et frais fixes éventuels par lot.</p>
+
+        <div style="border: 1.5px solid #121316; border-radius: 6px; padding: 16px; display: flex; flex-direction: column; gap: 14px; background: #FFFDF2">
+          <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 8px"><h4 style="margin: 0; font-size: 16px; font-weight: 700">Simuler mon enchère</h4><span class="mono" style="font-size: 11px; color: #6A6E76">calcul, pas une estimation</span></div>
+          <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+            <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #474A51">Si j’enchéris jusqu’à
+              <span style="position: relative; display: block"><input class="num-in" type="number" inputmode="numeric" min="0" step="100" value="6000"><span class="fig" style="position: absolute; right: 12px; top: 11px; font-size: 18px; color: #6A6E76">€</span></span>
+            </label>
+            <div style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #474A51"><span>je paierai environ</span><output class="fig" aria-live="polite" style="font-size: 28px; color: #121316; line-height: 44px">8 064 €</output></div>
+            <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #474A51">Si mon budget total est
+              <span style="position: relative; display: block"><input class="num-in" type="number" inputmode="numeric" min="0" step="100" value="8000"><span class="fig" style="position: absolute; right: 12px; top: 11px; font-size: 18px; color: #6A6E76">€</span></span>
+            </label>
+            <div style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #474A51"><span>j’enchéris au plus</span><output class="fig" aria-live="polite" style="font-size: 28px; color: #121316; line-height: 44px">5 952 €</output></div>
+          </div>
+          <p style="margin: 0; font-size: 12.5px; line-height: 1.45; color: #474A51">Hors carte grise, transport et frais fixes. Chaque 100 € d’enchère en plus ajoute 134 € au coût total, TVA et frais compris. Le pas d’enchère de la salle n’est pas connu.</p>
+        </div>
+      </section>
+
+      <section class="pane-sec" aria-labelledby="s-ct" style="display: flex; flex-direction: column; gap: 14px">
+        <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap">
+          <h3 id="s-ct" class="lbl" style="margin: 0; color: #474A51">Contrôle technique</h3>
+          <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 700; color: #146C43"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"></path></svg>Favorable</span>
+        </div>
+        <p class="mono" style="margin: 0; font-size: 12px; color: #474A51; line-height: 1.5">Périodique · 14 oct. 2026 · 36 785 km · valable jusqu’au 13 oct. 2028</p>
+        <ul aria-label="Les neuf fonctions contrôlées" style="list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px">
+          
+            <li style="min-height: 58px; box-sizing: border-box; padding: 8px 10px; border-radius: 3px; background: #FFFFFF; border: 1px solid #DEDED8; display: flex; flex-direction: column; justify-content: space-between; gap: 4px">
+              <span style="font-size: 12px; line-height: 1.2; color: #121316"><span class="mono" style="color: #6A6E76">0</span> Identification</span>
+              <span style="font-size: 12px; font-weight: 650; color: #146C43">RAS</span>
+            </li>
+          
+            <li style="min-height: 58px; box-sizing: border-box; padding: 8px 10px; border-radius: 3px; background: #FFFFFF; border: 1px solid #DEDED8; display: flex; flex-direction: column; justify-content: space-between; gap: 4px">
+              <span style="font-size: 12px; line-height: 1.2; color: #121316"><span class="mono" style="color: #6A6E76">1</span> Freinage</span>
+              <span style="font-size: 12px; font-weight: 650; color: #146C43">RAS</span>
+            </li>
+          
+            <li style="min-height: 58px; box-sizing: border-box; padding: 8px 10px; border-radius: 3px; background: #FFFFFF; border: 1px solid #DEDED8; display: flex; flex-direction: column; justify-content: space-between; gap: 4px">
+              <span style="font-size: 12px; line-height: 1.2; color: #121316"><span class="mono" style="color: #6A6E76">2</span> Direction</span>
+              <span style="font-size: 12px; font-weight: 650; color: #146C43">RAS</span>
+            </li>
+          
+            <li style="min-height: 58px; box-sizing: border-box; padding: 8px 10px; border-radius: 3px; background: #FFFFFF; border: 1px solid #DEDED8; display: flex; flex-direction: column; justify-content: space-between; gap: 4px">
+              <span style="font-size: 12px; line-height: 1.2; color: #121316"><span class="mono" style="color: #6A6E76">3</span> Visibilité</span>
+              <span style="font-size: 12px; font-weight: 650; color: #146C43">RAS</span>
+            </li>
+          
+            <li style="min-height: 58px; box-sizing: border-box; padding: 8px 10px; border-radius: 3px; background: #F1F1EC; border: 1px solid #8E9198; display: flex; flex-direction: column; justify-content: space-between; gap: 4px">
+              <span style="font-size: 12px; line-height: 1.2; color: #121316"><span class="mono" style="color: #6A6E76">4</span> Feux et électricité</span>
+              <span style="font-size: 12px; font-weight: 650; color: #474A51">1 mineure</span>
+            </li>
+          
+            <li style="min-height: 58px; box-sizing: border-box; padding: 8px 10px; border-radius: 3px; background: #F1F1EC; border: 1px solid #8E9198; display: flex; flex-direction: column; justify-content: space-between; gap: 4px">
+              <span style="font-size: 12px; line-height: 1.2; color: #121316"><span class="mono" style="color: #6A6E76">5</span> Essieux, roues, pneus, suspension</span>
+              <span style="font-size: 12px; font-weight: 650; color: #474A51">1 mineure</span>
+            </li>
+          
+            <li style="min-height: 58px; box-sizing: border-box; padding: 8px 10px; border-radius: 3px; background: #FFFFFF; border: 1px solid #DEDED8; display: flex; flex-direction: column; justify-content: space-between; gap: 4px">
+              <span style="font-size: 12px; line-height: 1.2; color: #121316"><span class="mono" style="color: #6A6E76">6</span> Châssis et carrosserie</span>
+              <span style="font-size: 12px; font-weight: 650; color: #146C43">RAS</span>
+            </li>
+          
+            <li style="min-height: 58px; box-sizing: border-box; padding: 8px 10px; border-radius: 3px; background: #FFFFFF; border: 1px solid #DEDED8; display: flex; flex-direction: column; justify-content: space-between; gap: 4px">
+              <span style="font-size: 12px; line-height: 1.2; color: #121316"><span class="mono" style="color: #6A6E76">7</span> Équipements</span>
+              <span style="font-size: 12px; font-weight: 650; color: #146C43">RAS</span>
+            </li>
+          
+            <li style="min-height: 58px; box-sizing: border-box; padding: 8px 10px; border-radius: 3px; background: #FFFFFF; border: 1px solid #DEDED8; display: flex; flex-direction: column; justify-content: space-between; gap: 4px">
+              <span style="font-size: 12px; line-height: 1.2; color: #121316"><span class="mono" style="color: #6A6E76">8</span> Nuisances</span>
+              <span style="font-size: 12px; font-weight: 650; color: #146C43">RAS</span>
+            </li>
+          
+        </ul>
+        <ol style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0">
+          <li style="padding: 12px 0; border-bottom: 1px solid #ECECE7; display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 12px">
+            <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 650; color: #474A51; height: 20px"><span class="fc fc-n"></span>Mineure</span>
+            <span style="font-size: 14px; line-height: 1.45">Réglage des feux de brouillard avant : mauvaise orientation horizontale d’un feu <span class="mono" style="font-size: 11.5px; color: #6A6E76">(G, AVD) · 4.5.2.a.1</span></span>
+          </li>
+          <li style="padding: 12px 0; border-bottom: 1px solid #ECECE7; display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 12px">
+            <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 650; color: #474A51; height: 20px"><span class="fc fc-n"></span>Mineure</span>
+            <span style="font-size: 14px; line-height: 1.45">Bras de suspension : détérioration d’un silentbloc de liaison au châssis ou à l’essieu <span class="mono" style="font-size: 11.5px; color: #6A6E76">(AVD, AVG) · 5.3.3.a.1</span></span>
+          </li>
+        </ol>
+        <p style="margin: 0; font-size: 12.5px; line-height: 1.45; color: #6A6E76">Mineure : à surveiller, sans contre-visite. AV, AR : avant, arrière ; G, D : gauche, droite. Libellés repris du procès-verbal.</p>
+      </section>
+
+      <section class="pane-sec" aria-labelledby="s-ver" style="display: flex; flex-direction: column; gap: 0">
+        <h3 id="s-ver" class="lbl" style="margin: 0 0 8px; color: #474A51">À vérifier aussi</h3>
+        <dl style="margin: 0; font-size: 14px">
+          <div style="display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 12px; padding: 10px 0; border-bottom: 1px solid #ECECE7"><dt style="font-weight: 650">Moteur</dt><dd style="margin: 0; color: #474A51">Absent de notre liste de moteurs à risque, qui en suit trois à ce jour.</dd></div>
+          <div style="display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 12px; padding: 10px 0; border-bottom: 1px solid #ECECE7"><dt style="font-weight: 650">Carrosserie</dt><dd style="margin: 0; color: #474A51">Non relevée pour ce lot : voir les photos de l’annonce.</dd></div>
+          <div style="display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 12px; padding: 10px 0; border-bottom: 1px solid #ECECE7"><dt style="font-weight: 650">Garantie</dt><dd style="margin: 0; color: #474A51">Incluse ; durée et couverture non précisées.</dd></div>
+        </dl>
+        <details style="margin-top: 14px; font-size: 14px"><summary style="cursor: pointer; font-weight: 600">Détail de la note</summary><p style="margin: 8px 0 0; color: #474A51">Chaque point, son poids et sa source.</p></details>
+      </section>
+
+      <div style="padding: 18px 28px 24px; border-top: 1px solid #DEDED8; font-size: 12.5px; line-height: 1.5; color: #6A6E76">Sources : annonce Alcopa et procès-verbal de contrôle technique, lus le 8 novembre. Analyse automatique : vérifiez sur place avant d’enchérir.</div>
+    </aside>
+  </div>
+</div>
+</div>
+</div>
+
+
+
+</body></html>

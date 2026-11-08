@@ -23,7 +23,7 @@ from typing import Any, Callable, Optional
 from ..config import Settings
 from ..ct_parser import CRITICAL_SYSTEMS, RESULT_CRITICAL, RESULT_FAVORABLE, RESULT_MAJOR, fold
 
-HEURISTIC_VERSION = "h1-2026.11"
+HEURISTIC_VERSION = "h1-2026.11b"  # b: no young-car bonus after a failed CT
 WEIGHTS = {"R": 0.35, "C": 0.35, "V": 0.30}
 TIER_ORDER = {"red": 0, "yellow": 1, "green": 2}
 
@@ -148,7 +148,7 @@ class Facts:
     damages: Optional[list[dict[str, str]]] = None  # [{"zone", "kind"}]; None = not read, [] = none
     battery_cert: Optional[dict[str, Any]] = None  # whitelisted certificate reading (confidence >= 0.8)
     battery_soh_source: Optional[str] = None  # "listing" | "certificate" | "lowest" | None
-    price_basis: Optional[str] = None  # which listing value ``price`` is: "start" (mise à prix) | "bid"
+    price_basis: Optional[str] = None  # which listing value ``price`` is: "start" | "bid" | "shown" (service._price_basis)
 
 
 @dataclass
@@ -159,6 +159,8 @@ class Gate:
     text: str
     src: str
     ref: str
+    # The numbers and keys in ``text``, so a page can word the gate in another language.
+    params: Optional[dict[str, Any]] = None
 
 
 @dataclass
@@ -173,8 +175,9 @@ class Partial:
     issues: list[str] = field(default_factory=list)  # reasons for 'partial' confidence
     engine_flags: list[str] = field(default_factory=list)
     # The effective price's parts, for the site's price table: {"start", "vat", "fees",
-    # "repairs", "ct_redo", "total"}, rounded to the cent; they add up to ``total``.
-    price_parts: Optional[dict[str, float]] = None
+    # "repairs", "ct_redo", "total"}, rounded to the cent; they add up to ``total``. Plus
+    # "fee_rate", not a part: the buyer's fee rate of the sale kind (None when unknown).
+    price_parts: Optional[dict[str, Optional[float]]] = None
 
     @property
     def cohort_eligible(self) -> bool:
@@ -222,6 +225,26 @@ def _warranty_text(label: str) -> str:
     if folded.startswith("GARANTIE"):
         return label  # e.g. "Garantie Sérénité de 3 mois incluse"
     return f"Garantie : {label}"
+
+
+def _warranty_params(label: str) -> dict[str, Any]:
+    """{"kind": "unspecified"} for the bare badge, else the listing's own words (French)."""
+    label = re.sub(r"\s+", " ", label).strip()
+    return {"kind": "unspecified"} if fold(label).strip() == "GARANTIE" else {"kind": "named", "label": label}
+
+
+def _damage_params(damages: Optional[list[Any]]) -> dict[str, Any]:
+    """The counts in ``_damage_penalty``'s text: body elements, and those with heavy work."""
+    zones: set[str] = set()
+    heavy: set[str] = set()
+    for zone, kind in _damage_pairs(damages):
+        fz = fold(zone).strip()
+        if _WHEEL_ZONE.search(fz):
+            continue
+        zones.add(fz)
+        if _HEAVY_KIND.search(fold(kind).strip()):
+            heavy.add(fz)
+    return {"n": len(zones), "heavy": len(heavy)}
 
 
 def _damage_pairs(damages: Optional[list[Any]]) -> list[tuple[str, str]]:
@@ -276,9 +299,15 @@ def _defect_count(n: int, kind: str) -> str:
     return f"{n} défaillance {kind}" if n == 1 else f"{n} défaillances {kind}s"
 
 
-def _reason(pillar: str, code: str, delta: float, text: str, src: str, ref: str = "") -> dict[str, Any]:
-    return {"code": code, "pillar": pillar, "delta": round(delta, 1), "text": text,
-            "evidence": {"src": src, "ref": ref}}
+def _reason(pillar: str, code: str, delta: float, text: str, src: str, ref: str = "",
+            params: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+    """A scored point. ``params`` holds the numbers and keys inside ``text`` (French), so the
+    page can word it in another language from ``code`` + ``params`` (BRIEF v2, B3)."""
+    out = {"code": code, "pillar": pillar, "delta": round(delta, 1), "text": text,
+           "evidence": {"src": src, "ref": ref}}
+    if params:
+        out["params"] = params
+    return out
 
 
 def model_family(model: Optional[str]) -> Optional[str]:
@@ -335,12 +364,13 @@ def _tighten_from_ct(p: Partial, ct: dict[str, Any]) -> None:
     if critical or ct.get("result") == RESULT_CRITICAL:
         if not any(g.code == "ct_critique" for g in p.gates):
             p.gates.append(Gate("ct_critique", "red", True, "CT défavorable pour défaillance critique", "ct",
-                                critical["code"] if critical else "result"))
+                                critical["code"] if critical else "result"))  # no params: the code says it all
     safety = [d for d in defects if d["severity"] == "major" and d["system"] in CRITICAL_SYSTEMS]
     if safety and not any(g.code == "ct_major_safety" for g in p.gates):
         system = SYSTEM_FR.get(safety[0]["system"], safety[0]["system"]).lower()
         p.gates.append(Gate("ct_major_safety", "yellow", False,
-                            f"Défaillance majeure : {system} ({safety[0]['code']})", "ct", safety[0]["code"]))
+                            f"Défaillance majeure : {system} ({safety[0]['code']})", "ct", safety[0]["code"],
+                            {"system": safety[0]["system"], "ct_code": safety[0]["code"]}))
 
 
 def assess(facts: Facts, settings: Settings, today: date, fee_model: Callable[..., float],
@@ -361,10 +391,12 @@ def assess(facts: Facts, settings: Settings, today: date, fee_model: Callable[..
         p.flags.append("age_unknown")
     elif age > 15:
         p.R -= 15
-        p.reasons.append(_reason("R", "age", -15 * w_r, f"Âge élevé ({age:.0f} ans)", "listing", "first_registration"))
+        p.reasons.append(_reason("R", "age", -15 * w_r, f"Âge élevé ({age:.0f} ans)", "listing", "first_registration",
+                                 {"years": round(age)}))
     elif age > 10:
         p.R -= 8
-        p.reasons.append(_reason("R", "age", -8 * w_r, f"Plus de 10 ans ({age:.0f} ans)", "listing", "first_registration"))
+        p.reasons.append(_reason("R", "age", -8 * w_r, f"Plus de 10 ans ({age:.0f} ans)", "listing", "first_registration",
+                                 {"years": round(age)}))
 
     km = facts.mileage_km
     if km is None:
@@ -374,28 +406,33 @@ def assess(facts: Facts, settings: Settings, today: date, fee_model: Callable[..
         band_pen = 25 if km > 250_000 else 15 if km > 200_000 else 8 if km > 150_000 else 0
         if band_pen:
             p.R -= band_pen
-            p.reasons.append(_reason("R", "mileage", -band_pen * w_r, f"Kilométrage élevé ({km:,} km)".replace(",", " "), "listing", "mileage_km"))
+            p.reasons.append(_reason("R", "mileage", -band_pen * w_r, f"Kilométrage élevé ({km:,} km)".replace(",", " "), "listing", "mileage_km",
+                                     {"km": km}))
         if age:
             per_year = km / max(age, 0.5)
             expected = 20_000 if facts.fuel == "diesel" else 15_000
             if per_year > expected * 1.33:
                 pen = min(15.0, (per_year - expected * 1.33) / 1000)
                 p.R -= pen
-                p.reasons.append(_reason("R", "km_per_year", -pen * w_r, f"{per_year:,.0f}".replace(",", " ") + " km/an, au-dessus de la normale", "listing", "mileage_km"))
+                p.reasons.append(_reason("R", "km_per_year", -pen * w_r, f"{per_year:,.0f}".replace(",", " ") + " km/an, au-dessus de la normale", "listing", "mileage_km",
+                                         {"km_year": round(per_year)}))
             elif facts.fuel == "diesel" and per_year < 7_000 and age > 3:
                 p.R -= 4
                 p.reasons.append(_reason("R", "diesel_short_trips", -4 * w_r, "Diesel peu roulé (risque FAP/EGR)", "listing", "mileage_km"))
             elif per_year < 10_000 and km < 150_000:
-                p.reasons.append(_reason("R", "low_mileage", 2 * w_r, f"Kilométrage modéré ({per_year:,.0f} km/an)".replace(",", " "), "listing", "mileage_km"))
+                p.reasons.append(_reason("R", "low_mileage", 2 * w_r, f"Kilométrage modéré ({per_year:,.0f} km/an)".replace(",", " "), "listing", "mileage_km",
+                                         {"km_year": round(per_year)}))
                 p.R += 2
 
     for entry in match_engines(facts):
         p.R -= entry["penalty"]
         p.engine_flags.append(entry["id"])
-        p.reasons.append(_reason("R", "engine_kb", -entry["penalty"] * w_r, entry["label_fr"], "kb", entry["id"]))
+        p.reasons.append(_reason("R", "engine_kb", -entry["penalty"] * w_r, entry["label_fr"], "kb", entry["id"],
+                                 {"ref": entry["id"]}))
         if entry.get("catastrophic"):
             p.gates.append(Gate("engine_risk", settings.engine_risk_max_tier, False,
-                                f"Motorisation à risque connu : {entry['label_fr']}", "kb", entry["id"]))
+                                f"Motorisation à risque connu : {entry['label_fr']}", "kb", entry["id"],
+                                {"ref": entry["id"]}))
 
     # ---------------------------------------------------------------- condition
     needs_ct = age is None or age >= 4
@@ -412,6 +449,15 @@ def assess(facts: Facts, settings: Settings, today: date, fee_model: Callable[..
             p.flags.append("ct_absent")
             p.issues.append("ct_absent")
             p.reasons.append(_reason("C", "ct_absent", -15 * w_c, "Pas de contrôle technique disponible", "listing", "documents"))
+        elif ct and ct.get("result") in (RESULT_MAJOR, RESULT_CRITICAL):
+            # A young car whose published (voluntary or uncertain) CT failed: no young-car bonus,
+            # since the CT says otherwise and its repairs are in the cost. C stays neutral; the
+            # CT is otherwise read as for any young car (it can only tighten the result).
+            what = "CT volontaire défavorable" if ct.get("nature") == "volontaire" else "CT défavorable"
+            p.reasons.append(_reason("C", "ct_young_failed", 0.0,
+                                     f"Véhicule de moins de 4 ans, mais {what} : pas de bonus « CT pas encore exigé »",
+                                     "ct", "result", {"voluntary": ct.get("nature") == "volontaire"}))
+            _tighten_from_ct(p, ct)
         else:
             p.C = 85
             p.reasons.append(_reason("C", "ct_not_required", 15 * w_c, "Véhicule de moins de 4 ans : CT pas encore exigé", "listing", "first_registration"))
@@ -432,17 +478,20 @@ def assess(facts: Facts, settings: Settings, today: date, fee_model: Callable[..
             pen = min(14, 2 * counts.get("minor", 0))
             p.C = 92 - pen
             p.reasons.append(_reason("C", "ct_favorable", (p.C - 70) * w_c,
-                                     "CT favorable, " + _defect_count(counts.get("minor", 0), "mineure"), "ct", "result"))
+                                     "CT favorable, " + _defect_count(counts.get("minor", 0), "mineure"), "ct", "result",
+                                     {"n": int(counts.get("minor", 0) or 0)}))
         elif ct["result"] == RESULT_MAJOR:
             pen = sum(6 * (1.5 if d["system"] in CRITICAL_SYSTEMS else 1) for d in defects if d["severity"] == "major")
             pen += counts.get("minor", 0)
             p.C = max(15.0, 60 - pen)
             p.reasons.append(_reason("C", "ct_major", (p.C - 70) * w_c,
-                                     "CT défavorable : " + _defect_count(counts.get("major", 0), "majeure"), "ct", "result"))
+                                     "CT défavorable : " + _defect_count(counts.get("major", 0), "majeure"), "ct", "result",
+                                     {"n": int(counts.get("major", 0) or 0)}))
         elif ct["result"] == RESULT_CRITICAL:
             p.C = 10
             p.reasons.append(_reason("C", "ct_critique", (10 - 70) * w_c,
-                                     "CT défavorable : " + _defect_count(counts.get("critical", 0), "critique"), "ct", "result"))
+                                     "CT défavorable : " + _defect_count(counts.get("critical", 0), "critique"), "ct", "result",
+                                     {"n": int(counts.get("critical", 0) or 0)}))
         _tighten_from_ct(p, ct)
         if ct.get("odometer_inconsistent"):
             p.gates.append(Gate("odometer", "yellow", False, "Historique kilométrique incohérent", "ct", "odometer"))
@@ -474,32 +523,37 @@ def assess(facts: Facts, settings: Settings, today: date, fee_model: Callable[..
         src = "battery" if soh_source in ("certificate", "lowest") else "listing"
         shown = math.floor(soh)
         if soh < 75 and not leased:
-            p.gates.append(Gate("battery_soh", "red", False, f"Batterie dégradée (SoH {shown} %)", src, "battery_soh_pct"))
+            p.gates.append(Gate("battery_soh", "red", False, f"Batterie dégradée (SoH {shown} %)", src, "battery_soh_pct",
+                                {"soh": shown}))
         pen = 0 if soh >= 90 else 8 if soh >= 80 else 15
         if pen:
             p.C -= pen
-            p.reasons.append(_reason("C", "battery_soh", -pen * w_c, f"État de santé batterie {shown} %", src, "battery_soh_pct"))
+            p.reasons.append(_reason("C", "battery_soh", -pen * w_c, f"État de santé batterie {shown} %", src, "battery_soh_pct",
+                                     {"soh": shown}))
         if soh_source == "lowest":
             p.flags.append("battery_soh_mismatch")
             p.reasons.append(_reason("C", "battery_soh_mismatch", 0.0,
                                      f"SoH annoncé et SoH du certificat batterie différents : {shown} % retenu "
-                                     "(valeur la plus basse)", "battery", "battery_cert"))
+                                     "(valeur la plus basse)", "battery", "battery_cert", {"soh": shown}))
 
     if facts.warranty:
         p.C += 5
-        p.reasons.append(_reason("C", "warranty", 5 * w_c, _warranty_text(facts.warranty), "listing", "warranty"))
+        p.reasons.append(_reason("C", "warranty", 5 * w_c, _warranty_text(facts.warranty), "listing", "warranty",
+                                 _warranty_params(facts.warranty)))
 
     damage_pen, damage_text = _damage_penalty(facts.damages)
     if damage_pen:
         p.C -= damage_pen
         p.flags.append("body_damage")
-        p.reasons.append(_reason("C", "body_damage", -damage_pen * w_c, damage_text, "listing", "damages"))
+        p.reasons.append(_reason("C", "body_damage", -damage_pen * w_c, damage_text, "listing", "damages",
+                                 _damage_params(facts.damages)))
 
     if folded_comments:
         severe = _first_affirmed(_RED_SEVERE, folded_comments, _negated_strict)
         if severe:
             p.gates.append(Gate("comment_dealbreaker", "red", True,
-                                f"Mention « {severe.group(1).lower()} » dans les commentaires", "comment", severe.group(1)))
+                                f"Mention « {severe.group(1).lower()} » dans les commentaires", "comment", severe.group(1),
+                                {"word": severe.group(1).lower()}))
         # Strict too: "Vendu sans garantie kilométrage non garanti" is a mileage warning.
         if _first_affirmed(_YELLOW_TEXT, folded_comments, _negated_strict):
             p.gates.append(Gate("mileage_not_guaranteed", "yellow", False, "Kilométrage non garanti", "comment", "kilometrage"))
@@ -530,14 +584,17 @@ def assess(facts: Facts, settings: Settings, today: date, fee_model: Callable[..
             p.flags.append("repair_estimate")
         redo = CT_REDO_COST if ct_redo else 0.0
         p.effective_price = round(eff + repair + redo, 2)
-        vat = 0.0
+        vat, fee_rate = 0.0, None
         if fee_split is not None:
-            vat = round(float(fee_split(facts.price, facts.sale_kind, settings.buyer_profile,
-                                        facts.vat_regime).get("vat") or 0.0), 2)
+            split = fee_split(facts.price, facts.sale_kind, settings.buyer_profile, facts.vat_regime)
+            vat = round(float(split.get("vat") or 0.0), 2)
+            rate = split.get("fee_rate")
+            fee_rate = float(rate) if isinstance(rate, (int, float)) and not isinstance(rate, bool) else None
         start = round(facts.price, 2)
         # The fees are what is left of the fee model's price, so the parts always add up.
         p.price_parts = {"start": start, "vat": vat, "fees": round(eff - start - vat, 2),
-                         "repairs": round(repair, 2), "ct_redo": redo, "total": p.effective_price}
+                         "repairs": round(repair, 2), "ct_redo": redo, "total": p.effective_price,
+                         "fee_rate": fee_rate}
     else:
         p.issues.append("price_unknown")
         p.flags.append("price_unknown")
@@ -598,7 +655,7 @@ def finalize(
     if ref_price is not None:
         reasons.append(_reason("V", "value", (V - 50) * WEIGHTS["V"],
                                f"Prix estimé frais inclus {'sous' if V >= 50 else 'au-dessus de'} la médiane des véhicules comparables",
-                               "cohort", basis))
+                               "cohort", basis, {"below": V >= 50}))
     issues = list(part.issues)
     if basis.startswith("value_unknown") and "price_unknown" not in issues:
         issues.append("value_unknown")
@@ -617,7 +674,7 @@ def finalize(
     final = int(round(max(0.0, min(pre, cap, 100.0))))
     for gate in part.gates:  # every gate is explained, binding or not
         delta = min(0.0, cap - pre) if gate is binding else 0.0
-        reasons.append(_reason("gate", gate.code, delta, gate.text, gate.src, gate.ref))
+        reasons.append(_reason("gate", gate.code, delta, gate.text, gate.src, gate.ref, gate.params))
     tier = "green" if final >= settings.green_min else "yellow" if final >= settings.yellow_min else "red"
     if TIER_ORDER[tier] > TIER_ORDER[max_tier]:  # safety net; caps already enforce this
         tier = max_tier

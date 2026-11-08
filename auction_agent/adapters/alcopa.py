@@ -827,10 +827,12 @@ class AlcopaAdapter(AuctionAdapter):
 
     def fee_split(self, price: float, sale_kind: str, buyer: str, vat_regime: str) -> dict[str, float]:
         """VAT a private buyer cannot recover on an "HT récupérable" car, and the room fees
-        (14.4 % TTC, at least 360 €; none online). Not rounded: ``fee_model`` rounds the sum."""
+        (14.4 % TTC, at least 360 €; none online). Not rounded: ``fee_model`` rounds the sum.
+        ``fee_rate`` is the fee rate of this sale kind, whether or not the minimum applied."""
         vat = price * self.VAT_RATE if (vat_regime == "ht_recuperable" and buyer == "particulier") else 0.0
-        fees = 0.0 if sale_kind == "online" else max(price * self.ROOM_FEE_RATE_TTC, self.ROOM_FEE_MIN_TTC)
-        return {"vat": vat, "fees": fees}
+        rate = 0.0 if sale_kind == "online" else self.ROOM_FEE_RATE_TTC
+        fees = 0.0 if sale_kind == "online" else max(price * rate, self.ROOM_FEE_MIN_TTC)
+        return {"vat": vat, "fees": fees, "fee_rate": rate}
 
     def fee_model(self, price: float, sale_kind: str, buyer: str, vat_regime: str) -> float:
         split = self.fee_split(price, sale_kind, buyer, vat_regime)  # one source of truth

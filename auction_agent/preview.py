@@ -36,7 +36,11 @@ CONTENT_TYPES = {
     ".png": "image/png",
     ".ico": "image/x-icon",
     ".webmanifest": "application/manifest+json",
+    ".woff2": "font/woff2",
+    ".json": "application/json; charset=utf-8",  # the page's dictionaries only: see JSON_DIRS
 }
+# JSON is served only from these folders (web/i18n/fr.json…): vercel.json stays private.
+JSON_DIRS = ("i18n",)
 
 SnapshotSource = Callable[[], tuple]  # () -> (HTTP status, JSON body bytes)
 
@@ -91,10 +95,13 @@ def site_headers(web_dir: Path = WEB_DIR) -> list[tuple[str, str]]:
 
 
 def static_file(web_dir: Path, url_path: str) -> Optional[Path]:
-    """The file under web_dir for a URL path, or None (outside, hidden, api/, other types)."""
-    path = unquote(url_path)
-    if path in ("", "/"):
-        path = "/index.html"
+    """The file under web_dir for a URL path, or None (outside, hidden, api/, other types).
+
+    A path ending in "/" is its folder's index.html, as Vercel serves it ("/en/" is the English page).
+    """
+    path = unquote(url_path) or "/"
+    if path.endswith("/"):
+        path += "index.html"
     if "\\" in path or "\x00" in path:
         return None
     parts = [p for p in path.split("/") if p]
@@ -102,7 +109,10 @@ def static_file(web_dir: Path, url_path: str) -> Optional[Path]:
         return None
     root = web_dir.resolve()
     target = root.joinpath(*parts).resolve()
-    if root not in target.parents or not target.is_file() or target.suffix.lower() not in CONTENT_TYPES:
+    suffix = target.suffix.lower()
+    if root not in target.parents or not target.is_file() or suffix not in CONTENT_TYPES:
+        return None
+    if suffix == ".json" and (len(parts) != 2 or parts[0] not in JSON_DIRS):
         return None
     return target
 

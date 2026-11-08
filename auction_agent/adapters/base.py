@@ -140,7 +140,8 @@ class AuctionAdapter(ABC):
 
     def fee_split(self, price: float, sale_kind: str, buyer: str, vat_regime: str) -> dict[str, float]:
         """What ``fee_model`` adds on top of ``price``: ``{"vat", "fees"}`` (VAT the buyer cannot
-        recover, buyer's fees). The default knows no VAT; adapters that do override it."""
+        recover, buyer's fees), plus ``"fee_rate"`` (the buyer's fee rate of that sale kind) when
+        the adapter knows it. The default knows no VAT and no rate; adapters that do override it."""
         return {"vat": 0.0, "fees": round(self.fee_model(price, sale_kind, buyer, vat_regime) - price, 2)}
 
     def handles(self, url: str) -> bool:
