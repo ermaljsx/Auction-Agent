@@ -145,3 +145,151 @@ def test_sale_from_url_kinds():
     assert (room.kind, room.room, room.external_id) == ("room", "Paris Sud", "10350")
     with pytest.raises(ValueError):
         a.sale_from_url("/voiture-occasion/peugeot/208-1120464")
+
+
+# ------------------------------------------------------------------ 2026 detail layout (synthetic, invented values)
+
+LAYOUT_2026 = "detail_layout_2026.html"
+
+
+def test_2026_layout_reads_bare_text_comment_damages_warranty_and_sale():
+    detail = parse_detail_page(read_fixture("alcopa", LAYOUT_2026), "1234567")
+    # The comment is a bare text node (no <p>); the HTML comment beside it is not read.
+    assert detail.comments == "Révision faite en 2025. Deux clés, carnet présent."
+    assert detail.fields["warranty"] == "Garantie Essentielle de 3 mois incluse"
+    assert detail.sale_url == "https://www.alcopa-auction.fr/salle-de-vente-encheres/beauvais/10999"
+    assert detail.photo_count == 2  # the two /damages/ pictures are not counted
+    assert detail.fields["current_price_attr"] == 6300.0
+    assert detail.vin == "VF1TESTZZ00000003" and "VF1TESTZZ00000003" not in str(detail.raw_specs)
+    # Deleted items (the item or its damage) are skipped; the rim is kept for display.
+    assert detail.damages == [
+        {"zone": "Pare-choc avant", "kind": "Peinture"},
+        {"zone": "Porte avant droite", "kind": "Débosselage"},
+        {"zone": "Jante avant gauche", "kind": "Peinture"},
+    ]
+
+
+def test_damages_never_carry_photos_files_or_staff_ids():
+    import json
+    detail = parse_detail_page(read_fixture("alcopa", LAYOUT_2026), "1234567")
+    dump = json.dumps(detail.damages, ensure_ascii=False).lower()
+    for word in ("http", ".jpg", "photo", "bucket", "user", "created", "proges", "900001", "example.test"):
+        assert word not in dump
+    assert all(set(d) == {"zone", "kind"} for d in detail.damages)
+
+
+def _layout_with_source(source: str) -> str:
+    html = read_fixture("alcopa", LAYOUT_2026)
+    start = html.index('data-source="') + len('data-source="')
+    return html[:start] + source + html[html.index('"', start):]
+
+
+@pytest.mark.parametrize("source,expected", [
+    ("[]", []), ("{not json", None), ("&quot;text&quot;", None), ("{}", None), ("[1, &quot;x&quot;, null]", []),
+])
+def test_odd_damage_json_never_raises(source, expected):
+    assert parse_detail_page(_layout_with_source(source), "1234567").damages == expected
+
+
+def test_damage_labels_are_cleaned_and_links_rejected():
+    import html as html_lib
+    import json
+    items = [{"product_id": 1234567, "is_deleted": 0, "is_show": 1,
+              "damage": {"is_deleted": 0, "zone_label": "  Capot\n avant ", "type_label": "https://x.test/a.jpg"}},
+             {"product_id": "1234567", "damage": {"zone_label": "photos/12/a.jpg", "type_label": "Rayure"}},
+             {"product_id": 1234567, "is_show": 0, "damage": {"zone_label": "Toit", "type_label": "Grêle"}},
+             {"product_id": 1234567, "damage": {"zone_label": "", "type_label": None}},
+             {"product_id": 1234567, "damage": {"zone_label": "Aile " + "x" * 100, "type_label": "Peinture"}}]
+    source = html_lib.escape(json.dumps(items), quote=True)
+    damages = parse_detail_page(_layout_with_source(source), "1234567").damages
+    assert damages == [{"zone": "Capot avant", "kind": "Défaut"}, {"zone": "Zone inconnue", "kind": "Rayure"},
+                       {"zone": ("Aile " + "x" * 100)[:60], "kind": "Peinture"}]
+
+
+def test_damage_product_id_of_another_car_is_refused():
+    with pytest.raises(ParseError):
+        parse_detail_page(read_fixture("alcopa", LAYOUT_2026), "7654321")
+    # Items of another product next to this car's own are dropped, the page is kept.
+    import html as html_lib
+    import json
+    items = [{"product_id": 1234567, "damage": {"zone_label": "Capot", "type_label": "Peinture"}},
+             {"product_id": 7654321, "damage": {"zone_label": "Toit", "type_label": "Grêle"}}]
+    detail = parse_detail_page(_layout_with_source(html_lib.escape(json.dumps(items), quote=True)), "1234567")
+    assert detail.damages == [{"zone": "Capot", "kind": "Peinture"}]
+
+
+def test_comment_section_stops_at_the_next_heading_and_can_be_empty():
+    table = '<table class="table table-striped"><tr><th>Marque</th><td>X</td></tr></table>'
+    html = (f"<html><body>{table}<div><h3>Commentaires</h3> Pneus neufs. <br/> Vidange faite"
+            "<h3>Lots similaires</h3> RENAULT CLIO</div></body></html>")
+    assert parse_detail_page(html, "1").comments == "Pneus neufs. Vidange faite"
+    empty = f"<html><body>{table}<div><h3>Commentaires</h3>   <!-- rien --> </div></body></html>"
+    assert parse_detail_page(empty, "1").comments is None
+
+
+def test_detail_warranty_without_cover_is_not_stored():
+    html = read_fixture("alcopa", LAYOUT_2026).replace("Garantie Essentielle de 3 mois incluse*", "Sans garantie")
+    assert "warranty" not in parse_detail_page(html, "1234567").fields
+
+
+def test_sale_link_is_the_sale_not_the_room_menu():
+    html = read_fixture("alcopa", LAYOUT_2026).replace(
+        '<a href="/salle-de-vente-encheres/beauvais/10999">Retour à la liste</a>', "")
+    # The room links of the menu and the breadcrumb come first; the sale link is still found.
+    assert parse_detail_page(html, "1234567").sale_url.endswith("/salle-de-vente-encheres/beauvais/10999")
+    no_sale = html.replace("/salle-de-vente-encheres/beauvais/10999", "/salle-de-vente-encheres/beauvais")
+    assert parse_detail_page(no_sale, "1234567").sale_url is None
+
+
+def test_multiline_card_price_and_current_bid():
+    page = parse_sale_page(read_fixture("alcopa", "sale_card_multiline.html"), 1)
+    assert page["parse_failures"] == 0 and page["expected_lots"] == 2
+    auris, clio = page["stubs"]
+    assert auris.starting_price == 15700.0 and auris.current_price_attr is None
+    assert auris.warranty == "Garantie" and auris.lot_number == 777
+    assert clio.starting_price is None and clio.current_price_attr == 8700.0 and clio.warranty is None
+    # The older card layout: "Mise à prix : --" then the bid.
+    yaris = parse_sale_page(read_fixture("alcopa", "sale_page2.html"), 2)["stubs"][0]
+    assert yaris.starting_price is None and yaris.current_price_attr == 3000.0
+
+
+@pytest.mark.parametrize("kind", ["room", "online"])
+@pytest.mark.parametrize("buyer", ["particulier", "pro"])
+@pytest.mark.parametrize("regime", ["ttc", "ht_recuperable"])
+@pytest.mark.parametrize("price", [1000, 2499, 10000, 12345.5])
+def test_fee_split_adds_up_to_the_fee_model(kind, buyer, regime, price):
+    """The split is the fee model's one source of truth: price + VAT + fees == fee_model."""
+    a = AlcopaAdapter(FakeHttp())
+    split = a.fee_split(price, kind, buyer, regime)
+    assert round(price + split["vat"] + split["fees"], 2) == a.fee_model(price, kind, buyer, regime)
+    assert (split["vat"] > 0) == (regime == "ht_recuperable" and buyer == "particulier")
+    assert (split["fees"] == 0) == (kind == "online")
+    if kind == "room":
+        assert split["fees"] >= a.ROOM_FEE_MIN_TTC
+
+
+def test_fee_model_is_unchanged_by_the_split():
+    """The old formula, kept here as the reference: identical results on a grid of prices."""
+    a = AlcopaAdapter(FakeHttp())
+
+    def old(price, kind, buyer, regime):
+        base = price * (1 + a.VAT_RATE) if regime == "ht_recuperable" and buyer == "particulier" else price
+        return round(base, 2) if kind == "online" else round(base + max(price * a.ROOM_FEE_RATE_TTC, a.ROOM_FEE_MIN_TTC), 2)
+
+    for price in [*range(100, 60_000, 37), 999.99, 2500.01, 17_777.77]:
+        for kind in ("room", "online"):
+            for buyer in ("particulier", "pro"):
+                for regime in ("ttc", "ht_recuperable"):
+                    assert a.fee_model(price, kind, buyer, regime) == old(price, kind, buyer, regime)
+
+
+def test_default_fee_split_puts_the_whole_extra_in_fees():
+    class Flat(AuctionAdapter):
+        def sale_from_url(self, url): ...
+        def discover_sales(self): ...
+        def list_sale(self, sale, max_pages=None): ...
+        def fetch_detail(self, stub): ...
+        def fee_model(self, price, sale_kind, buyer, vat_regime):
+            return round(price * 1.1, 2)
+
+    assert Flat(FakeHttp()).fee_split(1000, "room", "particulier", "ttc") == {"vat": 0.0, "fees": 100.0}

@@ -1,4 +1,4 @@
-"""SQLite storage: connections, schema v2, migrations and repository functions.
+"""SQLite storage: connections, schema (v2 base + forward migrations), repository functions.
 
 Design rules (see docs/MASTER_PLAN.md section 2):
 - Connections are always closed (`connect()` is a context manager) and run in
@@ -21,7 +21,7 @@ from typing import Any, Iterable, Iterator, Optional, Sequence
 
 from .config import utc_iso
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 _TS = "GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'"
 
@@ -304,6 +304,16 @@ MIGRATIONS: dict[int, list[str]] = {
         f"ALTER TABLE vehicles ADD COLUMN {_ts('late_ct_checked_at')}",
         "ALTER TABLE vehicles ADD COLUMN doc_attempts INTEGER NOT NULL DEFAULT 0",
     ],
+    # One migration shared by the crawler, AI-review and site changes of November 2026.
+    4: [
+        # Body-damage list read from the detail page: [{"zone", "kind"}] only (no photo
+        # URLs, file names or staff ids). NULL = not read yet; "[]" = read and empty.
+        "ALTER TABLE vehicles ADD COLUMN damages_json TEXT",
+        # Display data saved at scoring time (price breakdown, CT, damages, battery).
+        "ALTER TABLE assessments ADD COLUMN detail_json TEXT",
+        # Estimated cost of an AI batch, recorded on its first row like the token counts.
+        "ALTER TABLE llm_assessments ADD COLUMN cost_usd REAL CHECK (cost_usd IS NULL OR cost_usd >= 0)",
+    ],
 }
 
 
@@ -564,8 +574,9 @@ def update_vehicle_detail(
         if fields.get(key) and fields[key] != "unknown":
             sets.append(f"{key} = :{key}")
             params[key] = fields[key]
-    # Comments and raw specs replace the previous version when a new one was read.
-    for key in ("comments", "comments_sha256", "raw_specs_json"):
+    # Comments, raw specs and the damage list replace the previous version when a new one
+    # was read (None means "not read this time" and keeps what is stored; "[]" is a reading).
+    for key in ("comments", "comments_sha256", "raw_specs_json", "damages_json"):
         if key in fields and fields[key] is not None:
             sets.append(f"{key} = :{key}")
             params[key] = fields[key]
@@ -805,6 +816,8 @@ def get_stats(conn: sqlite3.Connection) -> dict[str, Any]:
         "yellow": q("SELECT count(*) FROM assessments WHERE tier = 'yellow'"),
         "red": q("SELECT count(*) FROM assessments WHERE tier = 'red'"),
         "llm_cached": q("SELECT count(*) FROM llm_assessments WHERE status = 'ok'"),
+        # Cost of every AI call so far, in USD (stored once per batch; unknown prices count 0).
+        "llm_cost_usd": q("SELECT round(coalesce(sum(cost_usd), 0), 4) FROM llm_assessments"),
         "last_run": dict(conn.execute(
             "SELECT house, kind, status, started_at, finished_at FROM sync_runs ORDER BY id DESC LIMIT 1"
         ).fetchone() or {}),

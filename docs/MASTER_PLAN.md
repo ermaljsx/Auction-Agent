@@ -106,7 +106,8 @@ vehicles(id INTEGER PRIMARY KEY AUTOINCREMENT,      -- AUTOINCREMENT: async LLM 
   engine_cc, power_kw, co2, vat_regime /*ttc|ht_recuperable|marge|unknown*/,
   battery_soh_pct, battery_leased, warranty,
   comments /*VIN/plate-redacted*/, comments_sha256,
-  raw_specs_json /*th→td dict EXCLUDING VIN/plate*/, photo_count,
+  raw_specs_json /*th→td dict EXCLUDING VIN/plate*/, photo_count /*gallery minus damage pictures*/,
+  damages_json /*v4: [{zone, kind}] only; NULL = not read, "[]" = none*/,
   ingest_state /*stub|complete|failed*/, ingest_attempts, next_attempt_at, last_error,
   detail_fetched_at, ct_state /*present|absent|failed*/,
   lifecycle /*active|dormant*/, outcome /*sold|not_sold|unknown*/,
@@ -144,6 +145,8 @@ sale_outcomes(house, brand, model, trim_family, fuel, gearbox, year, km_bucket_5
 vehicle_ids(house, external_id, vehicle_id)        -- aliases for re-consigned cars (new product_id, same VIN)
 ```
 `photos` is dropped: no photo URLs are stored at all, only `photo_count` and a link-out.
+
+**Forward migrations** (`db.MIGRATIONS`, run in order on open): v3 adds `vehicles.late_ct_checked_at` and `doc_attempts`; v4 (November 2026) adds `vehicles.damages_json`, `assessments.detail_json` (display data saved at scoring time) and `llm_assessments.cost_usd`. The damage list is built from the page's `zone_label` and `type_label` only: the page's item also holds photo URLs, storage file names and staff ids, which are never copied.
 
 ### Poll: set-based snapshot apply (single `write_tx`; simulated over 12 days)
 1. **Snapshot.** Walk every sale with `status='upcoming'` whose end time is unknown or in the future, *including sales that are already running*. Walk **unfiltered** pages and filter by category afterwards.
@@ -228,6 +231,7 @@ class DocumentRef: doc_type: Literal["ct", "maintenance", "battery"]; url: str
 @dataclass
 class LotDetail: specs: VehicleSpecs; vin: str | None; registration: str | None  # hashed/redacted by core, never stored clear
     documents: list[DocumentRef]; comments: str | None; photo_count: int; raw_specs: dict[str, str]
+    damages: list[dict[str, str]] | None   # [{"zone", "kind"}]; None = no readable list
 @dataclass
 class SaleListing: sale: SaleRef; stubs: list[LotStub]; complete: bool; reasons: list[str]
 
@@ -268,7 +272,9 @@ class AuctionAdapter(ABC):
 - The UA defaults to the current one, with an env override. The honest, identifiable bot UA that the legal research recommends is a decision for after recon.
 
 **Alcopa specifics** (medium confidence unless noted):
-- **Product ID:** taken from `urlsplit(href).path` matching `^/(?:[a-z]{2}/)?[a-z-]+/[^/]+/[^/]+-(\d{5,8})/?$`, cross-checked against the damage-JSON `product_id`.
+- **Product ID:** taken from `urlsplit(href).path` matching `^/(?:[a-z]{2}/)?[a-z-]+/[^/]+/[^/]+-(\d{5,8})/?$`, cross-checked against the damage-JSON `product_id` (on real pages it is only in `div.js-damage-proges[data-source]`; a page whose list names only other products is refused).
+- **Detail page (checked on real pages, 2026-11-07):** the seller comment is a bare text node after `<h3>Commentaires</h3>`; the warranty formula is in `h4#warranty`; the sale link is the one carrying a sale id (the menu links every room first); the gallery includes one picture per damage (`/damages/`), not counted in `photo_count`.
+- **Cards:** the "Mise à prix" amount and its "€" sit on separate lines, so whitespace is collapsed first; a card with a bid shows "Enchère courante" instead, read as `current_price_attr`.
 - **Normalisation:** mileage is parsed per line and bounds-checked; `lot 0` becomes NULL; a `--` price becomes NULL.
 - **Prices:** `data-current-price` is stored as `current_price_attr` (the opening price until bids arrive); `bid_observed` = attr > start. The `.text-nowrap` fallback is removed.
 - **Detail parsing:** the detail spec table is rendered twice, so it is de-duplicated. `<noscript>` is stripped.
@@ -298,8 +304,11 @@ class AuctionAdapter(ABC):
 - **CT freshness for the buyer profile** (`BUYER_PROFILE` = particulier by default, or pro). Reference date = sale + 21 days. A CT redo is needed if it is 6 months old or more (2 months after a défavorable). Exempt if the car is under 4 years old or the buyer is a pro.
 - **Inspection type:** a `volontaire` inspection is treated as an UNKNOWN result.
 - **Odometer:** check the history and flag any decrease.
-- **EV battery:** SoH, plus `battery_leased` detection.
-- **Other inputs:** warranty, a comment lexicon, and Alcopa damage zones.
+- **EV battery:** SoH, plus `battery_leased` detection. The battery certificate (`battery_parser.py`, `bat-1.0`, Moba layout; read at ingest and re-read from stored text at the next scoring run) cross-checks the listing value: listing kept when both agree within 2 points, certificate when the listing has none, the lower value (flag `battery_soh_mismatch`) when they differ. Only a reading with confidence ≥ 0.8 counts. The SoH is shown rounded down, so the integer thresholds are unchanged. Stored certificate text loses the link to the provider's up-to-date edition, which shows the VIN and plate.
+- **Other inputs:**
+  - Warranty: +5. The reason shows the detail page's formula; a bare card badge reads "Garantie mécanique incluse (formule non précisée)".
+  - Comment lexicon: a negation only covers its own clause; red deal-breakers need a negation right before them.
+  - Alcopa damage list: distinct non-wheel (zone, kind) pairs, dents and replacements counting double; `min(6, max(0, points − 3))` condition points; no gate. Calibrated on two pages: re-check the distribution after the first crawls.
 
 **Value (V).** Price-dependent; computed in code and never sent to the LLM.
 - `effective_price = fee_model(max(start, current_price_attr)) + repair_estimate(defect systems) + ct_redo_cost`.
@@ -325,23 +334,27 @@ class AuctionAdapter(ABC):
   - `ct_extract` when CT parsing fails or has low confidence. This can only *tighten* gates; validated codes must match `^\d\.\d+(\.\d+)*\.[a-z]\.[123]`.
   - `adjust` when the pre-value base score is within ±5 of a boundary and no gate binds.
   - an unknown `engine_key`, cached in `engine_profiles` (origin `kb|llm|owner`, survives purges).
-  - `verdict` text for 🟢 and Top N cars only.
+  - `verdict` text for every car the site lists for the sale being published (top N, then up to `PUBLIC_CARD_LIMIT` = 40 more; changed 2026-11-07 from "🟢 and Top N only") and for every other 🟢 car. Only cars whose sale ends within 7 days are sent.
+  - One shared selection rule, `service.site_picks`, decides what the site lists; the review plan (`service.plan_reviews`, read-only), the HTML report and the snapshot all call it. The only way a car can join the list after the AI pass is that an adjusted car drops out of it, so the plan takes a margin of one car per `adjust` candidate on both lists: one more of the other cars, and the next complete cars in line for the top picks (which replace a dropped top pick even from far down the list). It orders the work in page order, then other `adjust` cars, then other 🟢 cars, so `LLM_LIMIT` (80) is spent on what the page shows. The snapshot's `llm.coverage {listed, with_verdict}` makes any gap visible.
 - **Adjustment** is bounded to **[−15, +5]** and the reasons are stored. Anything from the LLM is labelled "Avis IA".
-- **Payload:** parsed codes and labels plus redacted comments inside delimited data blocks. **Never** raw CT text, VIN, plate or price.
-- **Client** (changed 2026-10-14 from Gemini to OpenAI at the owner's request):
-  - `openai >=3.31,<4` (Python ≥3.10, uses httpx2), imported lazily;
+- **Payload** (`PROMPT_VERSION` `p3-2026.11`): compact JSON, one car per line, inside delimited data blocks (`<` escaped so the block cannot be closed early). Specs, engine flags, battery SoH %, a warranty flag, the CT result, date and km, counts and **every** defect (code, severity, system, label; most serious first; cap 40, the real maximum is 24), the body-damage summary (zone, kind, n; sorted; cap 30) and comments scrubbed of VIN, plate, amounts, phones, e-mails and links (cap 1,000 characters). Empty fields are dropped. **Never** raw CT text, VIN, plate, URL or price. The French system prompt explains each field, says body damage is cosmetic unless structural or clustered, and forbids re-counting CT defects the rules already scored or mentioning price, value or seller.
+- **Client** (changed 2026-11-07: **Anthropic Claude Haiku 5.5 by default**, OpenAI kept behind `LLM_PROVIDER=openai`; the owner chose the cheapest current Claude model):
+  - `scoring/llm.py` is the shared core (prompt, schema, `parse_reviews`, `payload_hash`, the three error types) and imports no SDK; `make_client(settings)` builds the chosen provider's client and rejects a model of the other provider (`LLM_MODEL=gpt-…` with Claude) as a non-fatal config error: rules-only scoring, a note, `publish` exits 4.
+  - `scoring/llm_anthropic.py`: `anthropic >=2.6,<3` (API version `2026-10-21`; httpx2, shared with `openai` 3.x), imported lazily. Messages API with `system` plus one user message, `output_config = {format: json_schema RESPONSE_SCHEMA, effort}`, and `thinking`: `LLM_REASONING_EFFORT` `none` → disabled at API effort `low`, `low` (default) / `medium` / `high` → adaptive. `max_tokens = min(16000, 400 × cars + room)` with room 0 / 3,000 / 6,000 / 10,000 (thinking counts toward it). Never `temperature`, `top_p`, `top_k`, `fallbacks` or a prefill (Claude Haiku 5.5 returns 400 for them). Content blocks are read by type; `stop_reason` `refusal` (no server-side fallback on this model) and `max_tokens` are batch errors. Base URL pinned to `https://api.anthropic.com`, `max_retries=2` (the SDK retries 408/409/429/5xx/529, connection errors and timeouts), SDK tracing off. Errors: 401/403/404 and other 4xx are config errors; 402 `billing_error`, a 429 `enforced_spend_limit_reached`, a 403 `billing_frozen` or a "credit balance" 400 are billing config errors; 429, 5xx and 529 are transient; 413 and "prompt is too long" are batch errors; a timeout is a batch error. Checked in the installed SDK (2.6.0): with an explicit key the SDK reads no credential from the environment (`ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_PROFILE` ignored, no error), sends it as `Authorization: Bearer`, and still applies `ANTHROPIC_CUSTOM_HEADERS` and `ANTHROPIC_LOG` (both reported in the run notes).
+  - `scoring/llm_openai.py` (the OpenAI client below, moved unchanged): `openai >=3.31,<4` (Python ≥3.10, uses httpx2), imported lazily;
   - Chat Completions with a strict `json_schema` response format (`additionalProperties: false`, every property required; bounds enforced in code);
   - `reasoning_effort="none"`, `temperature 0` (accepted only at effort `none`), `store=False`, prompt caching requested off (`prompt_cache_options.mode="explicit"` without breakpoints; supported from gpt-5.6, a rejection is noted and the option dropped);
   - fixed base URL `https://api.openai.com/v1`, so a stray `OPENAI_BASE_URL` cannot reroute data;
-  - in Phase 1, synchronous batches of 20 with `--llm-limit 60`; Batch API (or Flex) in Phase 3.
+  - in Phase 1, synchronous batches of 20 cars or 150,000 payload characters (about 50K tokens, far below Claude Haiku 5.5's 100K-token rate-card boundary) with `LLM_LIMIT` 80; Batch API (or Flex) in Phase 3.
 - **Configuration:**
-  - The key is `OPENAI_API_KEY`, read from the environment or from a git-ignored `.env` file (template: `.env.example`).
-  - The model is `LLM_MODEL`, **default `gpt-6-luna`**. This reverses the earlier "no default model" decision: the owner chose the cheapest OpenAI model not scheduled for retirement (medium confidence: prices and deprecations come from search snippets plus the SDK's model list and litellm's price table, all dated 2026-10-14; OpenAI's site was blocked from the sandbox).
-  - `LLM_REASONING_EFFORT` defaults to `none` (`off` omits it for non-reasoning models). A model that rejects it stops the LLM with a clear message instead of falling back to its costlier default.
+  - `LLM_PROVIDER` = `anthropic` (default) or `openai`; any other value fails `Settings.validate()`. The key is `ANTHROPIC_API_KEY` (or `OPENAI_API_KEY`), read from the environment or from a git-ignored `.env` file (template: `.env.example`, Claude block first), cleaned of quotes and hidden from `repr`. The status line and the messages name the right variable; a leftover key of the other provider gets a hint.
+  - The model is `LLM_MODEL`, **default `claude-haiku-5-5`** (OpenAI: `gpt-6-luna`, the cheapest OpenAI model not scheduled for retirement on 2026-10-14; medium confidence: prices and deprecations come from search snippets plus the SDK's model list and litellm's price table; OpenAI's site was blocked from the sandbox).
+  - `LLM_REASONING_EFFORT` defaults to `low` for Claude and `none` for OpenAI (`off` omits it for non-reasoning OpenAI models). A value the provider does not take (`off`, `minimal`, `xhigh`, `max` with Claude) is a non-fatal config error; a model that rejects the effort stops the LLM with a clear message instead of falling back to a costlier default.
   - Per-request timeout scales with the token budget and the SDK retries at most once; a timeout counts as a batch failure (split and retried alone), so a slow batch is never resent and re-billed on every run.
-  - Billing errors (no credits, spend limit), 401/403/404 and rejected parameters stop the LLM for the run with a clear message; heuristic scoring continues. A refused, truncated, filtered or timed-out batch, and any car missing from an answer, is recorded as failed; those cars are retried alone on the next run, then skipped after two failures until their data, the model or the reasoning effort changes.
+  - Billing errors (no credits, spend limit), 401/403/404 and rejected parameters stop the LLM for the run with a clear message; heuristic scoring continues. A refused, truncated, filtered or timed-out batch, and any car missing from an answer, is recorded as failed; those cars are retried alone on the next run, then skipped after two failures until their data, the provider, the model, the reasoning effort or the prompt changes (all are in the failure key).
+  - **Cost tracking:** `scoring/pricing.py` holds the dated price table (`claude-haiku-5-5` $0.10 / $0.50 per 1M tokens up to a 100K-token prompt, $0.50 / $2.50 above; `gpt-6-luna` $0.10 / $0.50; dated ids match by prefix, an unknown model is reported, never guessed). `llm_assessments.cost_usd` (schema v4) is stored on the first row of each batch, failed batches with usage included; each run notes "AI review: N call(s), X input + Y output tokens, about $Z (model)"; `rescore_all` returns provider, tokens and cost; the snapshot's `llm` block carries `provider`, `tokens_in`, `tokens_out`, `cost_usd` and `coverage`; `stats` shows the total. `llm-estimate` (offline: no client, no network, no writes) prices the real payloads of a sale for every model in the table.
   - The `GEMINI_PAID_TIER` guard is dropped: OpenAI API data is not used for training unless the organisation opts in (high confidence), and no free tier is usable without credits (medium).
-- **Cost:** about 3.6–3.9k new IDs/week × 40% assumed triggers × (about 1.5k input + 300 output tokens) ≈ **$0.45/week** on `gpt-6-luna` at standard rates ($0.10 / $0.50 per 1M tokens), about half on Batch or Flex. These are unverified snippet prices.
+- **Cost** (`llm-estimate` on the 2026-11-09 Beauvais sale, read from a copy of the real database; tokens estimated at 3 characters each): 50 listed cars, mean payload 763 characters (max 2,134) before comments and damage lists are crawled, 3 batches, about 15.6K input tokens per run. Claude Haiku 5.5 at effort `low`: **about $0.008–0.016 per run, $0.015–0.03 a week (2 runs), $0.07–0.14 a month**; `gpt-6-luna` at effort `none` slightly less (same list price, no thinking). A one-off review of all 573 cars: about $0.10–0.19. The Message Batches API would halve this (results within 24 h); not worth a submit/collect split yet. Projected payloads with comments and damages: about 1,400 characters per listed car, still cents per month.
 
 **Top N of the week.** Ranked over the *filtered* eligible set: sales in the next 7 days, tier ≠ red, `confidence='full'`, and audience matching the buyer profile.
 
@@ -371,6 +384,13 @@ class AuctionAdapter(ABC):
 - `/admin` (basic auth): sync runs, completeness, breaker events, DB size, read-only-open health check, houses that have data but no enabled adapter.
 
 **Public mode (only after licences):** show a top-N subset per filter with a prominent link-out. **No full-catalogue FTS** (*Innoweb*), and no claims of exhaustiveness. Full filters are available only in private/invite mode.
+
+**What runs today (online MVP, redesigned 2026-11-08):** a static page on Vercel (`web/`), behind Vercel Authentication, reading one JSON snapshot from a private Blob store; no server-side rendering and no database online.
+- **Look:** a printed sale catalogue. Lot numbers in a condensed DIN face (Bahnschrift with `font-stretch: 75%`, tabular figures) hang in a left margin; hairlines between lots, 2px rules above sections, no cards, shadows or pills. Navy ink on cool paper with one accent (EU plate-band blue) for links, focus and the open lot; semantic good/watch/risk colours and CT severity colours, all at least 4.5:1 in light and dark (checked by `tests/test_site.py`). System fonts only.
+- **Page:** sentence header with countdown, notices, one-line status; sticky filter bar (search by brand, model or lot number, budget, fuel, gearbox, km, year, CT, tier, sort); sections "Sélection de la semaine", "Autres voitures correctes" and "Les autres lots" (every other lot on one line with its main reason); the car sheet inline on phone, in a sticky right pane from 64rem; `#lot-N` deep links; one message per API error.
+- **Snapshot schema 2** (`snapshot.py`, additive over schema 1): each listed card gains `subtitle` (trim without the model words), `ct_result`, `ct_line` and `detail {score {before_cap, llm, cap, cap_gate}, value {known, text}, incomplete, price {start, vat, fees, repairs, ct_redo, total}, ct {result, nature, date, km, valid_until, odometer_inconsistent, redo, doubtful, defects ≤ 40, more}, ct_doc, damages [{zone, kind, n}], battery {soh, source, leased}, reasons [{text, src, pillar, pts}]}`; `compact` lists every other lot of the sale (≤ 800, sorted by lot) with `why`; `counts.compact`, `counts.partial_why`, a `scoring` block (weights and thresholds) and an accurate `fees_note`. Above 1.5 MB the compact list is dropped (`counts.compact_dropped`). Gate texts appear once, in `gates` (no longer repeated in `reasons`).
+- **Where the data comes from:** the price breakdown is saved at scoring time in `assessments.detail_json` (schema v4), with the CT document state, damages and battery; `AuctionAdapter.fee_split` (Alcopa: VAT a private buyer cannot recover, room fees) is the single source of `fee_model`; `heuristics.SYSTEM_FR` names CT functions in French ("Défaillance majeure : freinage (1.2.1.a.2)").
+- **Privacy:** seller comments, photos, internal ids, VINs and plates never reach the snapshot; defect labels and damage text go through `redact()` again, and the AI's verdicts and reasons are scrubbed of links, phones and e-mails wherever they are published; key names avoid the words the publish tests block.
 
 ---
 
@@ -486,6 +506,12 @@ class AuctionAdapter(ABC):
 - gemini-2.5-flash shutdown dates (conflicting): https://discuss.ai.google.dev/t/gemini-2-5-flash-and-gemini-2-5-flash-lite-returning-404-no-longer-available-today-july-9-contradicts-oct-16-2026-shutdown-date/174267
 - Gemini API terms, paid vs unpaid tier (archived Dec 2025 version only): https://ai.google.dev/gemini-api/terms-archive/terms_12_18_25
 
+### Anthropic (added 2026-11-07; high for the SDK, medium for prices, terms not checked)
+No network access was available while this was written, so nothing was read on Anthropic's websites.
+- The bundled claude-api skill (read 2026-11-07): `python/claude-api/README.md` (client, timeouts, retries, stop reasons, refusal details), `python/claude-api/tool-use.md` (structured outputs with `output_config.format`), `shared/model-migration.md` "Migrating to Claude Haiku 5.5" (model id `claude-haiku-5-5`, the two rate cards, adaptive thinking only, `disabled` thinking accepted up to effort `high`, sampling parameters and prefill rejected, refusals with no server-side fallback, the ~30% larger tokenizer), `shared/error-codes.md` (402 `billing_error`, 413, 429, 529, typed exceptions and `.type`), `shared/models.md`.
+- The installed `anthropic` 2.6.0 wheel, read-only: `_client.py` (credential resolution, `base_url` precedence, `ANTHROPIC_CUSTOM_HEADERS`, Bearer auth), `_constants.py` (API version `2026-10-21`, 2 retries), `_base_client.py` (retried statuses, non-streaming time limit), `_exceptions.py` and `_error_classes.py` (status and `error_code` classes, e.g. 429 `enforced_spend_limit_reached`), `types/message.py`, `types/usage.py` (`output_tokens_details.thinking_tokens`), `types/refusal_stop_details.py`, `_tracing.py` (`open_telemetry=False`).
+- To verify by the owner: pricing https://platform.claude.com/docs/en/about-claude/pricing · commercial terms https://www.anthropic.com/legal/commercial-terms (data use and retention of API requests).
+
 ### OpenAI (added 2026-10-14; high for the SDK, medium for models, prices and terms)
 OpenAI's websites returned proxy 403 from the sandbox, so these pages were seen only through search results. Model ids, deprecation notes and parameter names were cross-checked in the `openai` 3.31.0 wheel; prices were cross-checked in litellm 1.105.1's price table.
 - `openai` SDK on PyPI (read directly, wheel source): https://pypi.org/project/openai/
@@ -537,9 +563,12 @@ Run from **both** the owner's network **and** the intended VPS. At most about 12
 See the commit history on `claude/relaxed-albattani-3w9fgh` and the README "Architecture" section. Known limits of Phase 1:
 - Every crawl is `scoped` (one sale), so no car is ever marked missing or purged. The lifecycle engine is Phase 2.
 - Alcopa selectors are ported from the original prototype and tested against synthetic fixtures built from third-party-quoted markup. They must be re-validated on real captured pages (`cli capture`).
-- The LLM is optional and runs only on triggers. It needs `OPENAI_API_KEY` (in `.env` or the environment); the model defaults to `gpt-6-luna`.
+- The LLM is optional and runs only on triggers. It needs `ANTHROPIC_API_KEY` (in `.env` or the environment); the model defaults to `claude-haiku-5-5`. `LLM_PROVIDER=openai` with `OPENAI_API_KEY` switches back to `gpt-6-luna`.
+- No live Claude call has been made. The request shape was tested against the real `anthropic` 2.6.0 SDK with an in-memory transport (URL, auth header, body without sampling parameters, thinking + text answer, billing, spend limit, overload, timeout, refusal). Whether `claude-haiku-5-5` accepts this exact schema with effort `low`, how many thinking tokens it spends, and the real token counts are confirmed only by the owner's first run (`score --llm-limit 5`, then `llm-estimate`, which then uses the measured answer sizes). Anthropic's data terms were not read.
 - Redirects are followed by hand. Every hop is robots-checked and throttled, but a redirect to another host is not refused, because the CT links' real redirect behaviour is unknown until recon. Decide in Phase 2.
 - No live OpenAI call was possible from the sandbox. The request shape was tested against the real SDK with an in-memory transport, but whether `gpt-6-luna` accepts strict schema + effort `none` + `temperature 0` + prompt-cache options together, and whether it really spends zero reasoning tokens at `none`, is confirmed only by the owner's first run (`score --llm-limit 5`). Rejected `temperature` or cache options are dropped and retried automatically.
+- The battery-certificate parser knows one layout (Moba). On the 13 certificates of the 2026-11-07 crawl it read the SoH 13/13, each within 1 point of its capacity ratio and equal to the listing value rounded down. Another provider's layout gives confidence 0 and is ignored; the listing value still applies.
+- Seller comments, the damage list, the warranty formula, card bids and the corrected sale link are read from the next crawl on: the cars already stored are not re-fetched for them.
 - CT parser v2 is still `ct-2.0`. Its fixes (legend lines, `(s)` headers, page furniture, three-level codes) are tested on synthetic text only. The ≥ 20 real-PV validation in Phase 2 remains the gate before the defect-code suffix may override section headers.
 
 ### Phase 1 adversarial review (2026-10-14)

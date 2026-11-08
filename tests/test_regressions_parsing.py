@@ -9,6 +9,7 @@ from auction_agent.adapters.alcopa import (
     parse_detail_page,
     parse_sale_page,
 )
+from auction_agent.adapters.base import ParseError
 from auction_agent.ct_parser import RESULT_MAJOR, parse_controle_technique
 from auction_agent.privacy import redact, scrub_for_llm
 from tests.conftest import read_fixture
@@ -163,6 +164,23 @@ def test_expected_lots_variants(snippet, expected):
     assert parse_sale_page(f"<html><body><p>{snippet}</p></body></html>")["expected_lots"] == expected
 
 
+def test_expected_lots_count_the_listed_category_not_the_whole_sale():
+    """Real page, 2026-11-07: 693 lots in the sale, 573 of them passenger cars (the VP filter).
+    Comparing the 573 cars walked with 693 marked every weekly crawl 'incomplete'."""
+    html = ('<html><body><p>Nombre de lots : <b>693</b></p><span class="badge">693</span>'
+            '<h1 class="founded_items"><b class="nb_items">573</b> Résultat(s)</h1></body></html>')
+    assert parse_sale_page(html)["expected_lots"] == 573
+    html_1234 = '<html><body><h1 class="founded_items"><b class="nb_items">1 234</b> Résultat(s)</h1></body></html>'
+    assert parse_sale_page(html_1234)["expected_lots"] == 1234
+    empty = '<html><body><p>Nombre de lots : <b>12</b></p><h1 class="founded_items"><b class="nb_items"></b></h1></body></html>'
+    assert parse_sale_page(empty)["expected_lots"] == 12  # unreadable filtered count: the sale total
+    card = '<div class="card h-100"><a href="/voiture-occasion/x/y-1">x</a></div>'
+    zero = ('<html><body><p>Nombre de lots : <b>12</b></p><h1 class="founded_items"><b class="nb_items">0</b>'
+            f' Résultat(s)</h1>{card}</body></html>')
+    assert parse_sale_page(zero)["expected_lots"] == 12  # '0 results' beside cards is not trusted
+    none = '<html><body><h1 class="founded_items"><b class="nb_items">0</b> Résultat(s)</h1></body></html>'
+    assert parse_sale_page(none)["expected_lots"] == 0  # a genuinely empty listing stays 0
+
 # ------------------------------------------------------------------ fuels, numbers, timestamps
 
 @pytest.mark.parametrize("label,fuel", [
@@ -207,6 +225,15 @@ def _real_pages():
     return sorted(folder.glob("*.html")) if folder.exists() else []
 
 
+def _real_id(path) -> str:
+    """The product id in a captured page's name ("detail-<slug>-<id>-<hash>.html"): the
+    damage list carries it too, and the parser refuses a page of another product."""
+    import re
+    m = re.search(r"-(\d{5,8})-[0-9a-f]{8}\.html$", path.name)
+    assert m, f"unexpected capture name {path.name}"
+    return m.group(1)
+
+
 @pytest.mark.parametrize("path", _real_pages(), ids=lambda p: p.name)
 def test_real_captured_pages_parse(path):
     """Runs only after `python -m auction_agent capture` (git-ignored pages); skipped otherwise."""
@@ -215,7 +242,46 @@ def test_real_captured_pages_parse(path):
         page = parse_sale_page(html, 1)
         assert page["stubs"] and page["parse_failures"] == 0
     else:
-        detail = parse_detail_page(html, "real")
+        detail = parse_detail_page(html, _real_id(path))
         assert detail.fields, "no spec field recognised: selectors drifted"
         if detail.vin:
             assert detail.vin not in str(detail.raw_specs)
+
+
+_REAL_DETAILS = [p for p in _real_pages() if p.name.startswith("detail-")]
+_REAL_SALES = [p for p in _real_pages() if p.name.startswith("sale-")]
+
+
+@pytest.mark.skipif(not _REAL_DETAILS, reason="no captured detail page (git-ignored tests/fixtures/alcopa/real/)")
+@pytest.mark.parametrize("path", _REAL_DETAILS, ids=lambda p: p.name)
+def test_real_detail_reads_comment_damages_warranty(path):
+    import json
+    import re
+    html = path.read_text(encoding="utf-8")
+    detail = parse_detail_page(html, _real_id(path))
+    assert detail.comments and "commentaire" not in detail.comments.lower()
+    assert detail.damages and all(set(d) == {"zone", "kind"} for d in detail.damages)
+    dump = json.dumps(detail.damages, ensure_ascii=False).lower()
+    assert not any(w in dump for w in ("http", ".jpg", "photo", "bucket", "user", "created"))
+    assert re.match(r"^Garantie \S+", detail.fields.get("warranty") or "")
+    gallery = len(set(re.findall(r'href="([^"]+)"[^>]*data-gallery="pictures"', html))
+                  | set(re.findall(r'data-gallery="pictures"[^>]*href="([^"]+)"', html)))
+    assert 0 < detail.photo_count < gallery  # the damage pictures are not counted
+    assert re.search(r"/salle-de-vente-encheres/[a-z0-9-]+/\d+$", detail.sale_url or "")
+    with pytest.raises(ParseError):
+        parse_detail_page(html, "1")  # the damage list names another product
+
+
+@pytest.mark.skipif(not _REAL_SALES, reason="no captured sale page (git-ignored tests/fixtures/alcopa/real/)")
+@pytest.mark.parametrize("path", _REAL_SALES, ids=lambda p: p.name)
+def test_real_sale_cards_read_a_price(path):
+    import re
+    from bs4 import BeautifulSoup
+    html = path.read_text(encoding="utf-8")
+    page = parse_sale_page(html, 1)
+    footers = [re.sub(r"\s+", " ", f.get_text(" ", strip=True))
+               for f in BeautifulSoup(html, "lxml").select(".card-footer")]
+    with_price = sum(bool(re.search(r"Mise à prix : \d", t)) for t in footers)
+    with_bid = sum(bool(re.search(r"Enchère courante : \d", t)) for t in footers)
+    assert with_price and sum(s.starting_price is not None for s in page["stubs"]) == with_price
+    assert sum(s.current_price_attr is not None for s in page["stubs"]) == with_bid

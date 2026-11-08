@@ -4,27 +4,88 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>À propos – Auction Agent</title>
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#EEF1F5" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0B1222" media="(prefers-color-scheme: dark)">
+<title>Comment lire une fiche – Auction Agent</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-<header class="top"><div class="wrap"><h1>À propos</h1></div></header>
-<main class="wrap">
-  <section class="panel">
-    <h2>Ce que fait ce site</h2>
-    <p>Chaque semaine, un programme lit le catalogue public de la vente du lundi de la salle Alcopa de Beauvais
-      (véhicules particuliers), lit les procès-verbaux de contrôle technique publiés avec les lots, puis note
-      chaque véhicule de 0 à 100 selon des règles fixes : fiabilité (âge, kilométrage, moteurs à risque connus),
-      état (résultat et défaillances du contrôle technique, commentaires) et prix comparé aux véhicules semblables.
-      Un modèle d'IA ajoute un court avis sur les voitures mises en avant ; il peut se tromper.</p>
-    <h2>Ce que ce site n'est pas</h2>
-    <p>Un projet personnel et non commercial, sans aucun lien avec Alcopa. Les notes sont indicatives et ne
-      constituent pas un conseil d'achat : vérifiez toujours l'annonce d'origine et le véhicule avant d'enchérir.</p>
+<a class="skip" href="#main">Aller au contenu</a>
+<header class="masthead masthead-sm">
+  <div class="page">
+    <div class="brandbar">
+      <a class="brand" href="/">Auction Agent</a>
+      <nav aria-label="Pages du site"><a href="/">Vente de la semaine</a></nav>
+    </div>
+    <div class="sale-head">
+      <h1>Comment lire une fiche</h1>
+    </div>
+  </div>
+</header>
+<main id="main" class="page" tabindex="-1">
+  <div class="prose">
+    <p class="lede">Chaque semaine, un programme lit le catalogue public de la vente du lundi de la salle Alcopa de
+      Beauvais (véhicules particuliers) et les documents publiés avec chaque lot, puis note chaque voiture de 0 à 100
+      selon des règles fixes.</p>
+
+    <h2>La note</h2>
+    <p>Elle combine trois parties : fiabilité 35 %, état 35 % et prix 30 %.</p>
+    <ul>
+      <li>La fiabilité tient compte de l'âge, du kilométrage par an et des moteurs à risque connus.</li>
+      <li>L'état vient du contrôle technique (résultat et défaillances), de la garantie, des dommages de carrosserie
+        relevés par la maison de vente, de la santé de la batterie et des mentions de l'annonce.</li>
+      <li>Le prix compare le prix tout compris à celui des voitures semblables en vente (même modèle, années et
+        kilométrages proches). Avec trop peu de voitures comparables, il reste neutre et la fiche le dit.</li>
+    </ul>
+    <p>Une voiture est « favorable » à partir de 80, « correcte » à partir de 60, « écartée » en dessous. Certains
+      défauts plafonnent la note quelle que soit la somme : une défaillance critique au CT, un moteur à risque connu, une
+      mention comme « moteur HS » ou « kilométrage non garanti ». Tant qu'une donnée manque (mise à prix pas encore
+      publiée, prix pas encore comparé, CT absent ou illisible), la note reste sous le niveau favorable. La fiche indique
+      chaque plafond et ce qui fait la note, point par point.</p>
+
+    <h2>Le prix tout compris</h2>
+    <p>Mise à prix (ou l'enchère courante quand une enchère est déjà portée, la fiche l'indique), plus les frais
+      acheteur (14,4 % TTC, au moins 360 € en salle), plus la TVA quand un particulier ne peut
+      pas la récupérer, plus une estimation des réparations exigées par le CT, plus le prix d'un nouveau CT quand il faudra
+      le refaire avant de revendre à un particulier. Les frais fixes par lot ne sont pas inclus. Le prix final dépend des
+      enchères.</p>
+
+    <h2>Le contrôle technique</h2>
+    <ul class="sev-list">
+      <li><span class="sev sev-minor" aria-hidden="true"></span><span>Mineure : à surveiller, sans contre-visite.</span></li>
+      <li><span class="sev sev-major" aria-hidden="true"></span><span>Majeure : contre-visite obligatoire dans les deux mois.</span></li>
+      <li><span class="sev sev-critical" aria-hidden="true"></span><span>Critique : la voiture ne peut rouler que jusqu'à minuit le jour du contrôle.</span></li>
+    </ul>
+    <p>La fiche reprend le résultat, la date, le kilométrage relevé, la validité et chaque défaillance avec son code.
+      Quand le procès-verbal est un scan sans texte ou que sa lecture est incertaine, la fiche le dit et la note ne s'y fie pas.</p>
+
+    <h2>Carrosserie et batterie</h2>
+    <p>Les dommages de carrosserie sont ceux relevés par la maison de vente (zone et nature, sans les photos). Quelques
+      retouches sont normales ; au-delà, la note d'état baisse un peu, jamais beaucoup. Pour les voitures électriques et
+      hybrides rechargeables, la santé de la batterie vient de l'annonce ou du certificat batterie publié ; une batterie
+      sous 75 % écarte la voiture, sauf en location.</p>
+
+    <h2>L'avis IA</h2>
+    <p>Un modèle d'IA lit les mêmes données que les règles (jamais le prix, le numéro de série ou la plaque) et donne un court
+      avis sur chaque voiture détaillée. Il peut se tromper : c'est un second regard, pas une expertise.</p>
+
     <h2>Données</h2>
-    <p>Pas de photos, pas de numéro de série (VIN), pas de plaque d'immatriculation, pas de commentaires bruts.
+    <p>Pas de photos, pas de numéro de série (VIN), pas de plaque d'immatriculation, pas de commentaires bruts du vendeur.
       Chaque fiche renvoie vers l'annonce d'origine. Accès réservé aux personnes invitées.</p>
-    <p><a href="/">Retour à l'analyse de la semaine</a></p>
-  </section>
+
+    <h2>Ce que ce site n'est pas</h2>
+    <p>Un projet personnel et non commercial, sans aucun lien avec Alcopa. Les notes sont indicatives et ne constituent pas un
+      conseil d'achat : vérifiez toujours l'annonce d'origine et le véhicule avant d'enchérir.</p>
+    <p><a href="/">Retour à la vente de la semaine</a></p>
+  </div>
 </main>
+<footer class="foot">
+  <div class="page">
+    <p>Analyse mise à jour le jeudi soir et le samedi matin (heure de Paris). Projet personnel, sans lien avec Alcopa.
+      Indications, pas un conseil d'achat.</p>
+  </div>
+</footer>
 </body>
 </html>

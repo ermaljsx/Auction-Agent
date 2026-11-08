@@ -1,0 +1,37 @@
+N11.02
+N° d'imprimé CV
+V000990601
+Contrôle volontaire Partiel 15/10/2026 V2699061
+S099Y002
+DEFAILLANCES MAJEURES (contre-visite en CAS de contrôle technique
+réglementaire) :
+GARAGE CONTROLE FICTIF
+1 - 2.1.3.b.2. ÉTAT DE LA TIMONERIE DE DIRECTION : Usure excessive des
+articulations (G)
+5 IMPASSE DU BANC D'ESSAI 2 - 4.1.2.a.2. ORIENTATION (FEUX DE CROISEMENT) : L'orientation
+99991 BOURG-TEST d'un feu de croisement n'est pas dans les limites prescrites (D)
+Non renseignés
+DEFAILLANCES MINEURES (pas de contre-visite en CAS de contrôle
+technique réglementaire) :
+1 - 6.2.10.a.1. GARDE-BOUE, DISPOSITIFS ANTI-PROJECTIONS :
+099Y5678
+Manquants, mal fixés ou gravement rouillés (AR)
+AB-123-CD (F) 14/02/2019 14/02/2019
+VP CITROEN M10TESTVP000D04
+VF7TESTAB00000002 GO
+64210 C3
+DUPONT-ESSAI CAMILLE
+8 ALLEE DES TESTS
+99992 HAMEAU-FICTIF
+0 - IDENTIFICATION DU VÉHICULE
+AVANT ARRIERE
+1 - ÉQUIPEMENTS DE FREINAGE
+G D G D
+2 - DIRECTION
+Ripage (-8 à +8m/km) +0.4m/km
+3 - VISIBILITÉ
+4 - FEUX, DISPOSITIFS RÉFLÉCHISSANTS ET Dissymétrie suspension (=30%) 3% 9%
+ÉQUIPEMENTS ÉLECTRIQUES
+5 - ESSIEUX, ROUES, PNEUS, SUSPENSION
+6 - CHÂSSIS ET ACCESSOIRES DU CHÂSSIS Frein de service
+7 - AUTRE MATÉRIEL Force de freinage: 280daN 290daN 210daN 21

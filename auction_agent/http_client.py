@@ -6,6 +6,10 @@
 - 403/405 responses and known WAF/challenge pages raise BlockedError. We never try to
   solve or bypass a challenge.
 - robots.txt is fetched through the same session, then parsed; 404 means allow-all.
+  On the auction site, a 403/405 robots.txt is a block. On another site that the auction
+  site redirected us to (its document storage on S3, whose root answers 403 AccessDenied
+  XML), a plain 4xx robots.txt means "unavailable", so allowed (RFC 9309 §2.3.1.3); a
+  challenge there, or a refusal of the document itself, still raises BlockedError.
 - A minimum interval (with jitter) separates two requests to the same host.
 - Responses are always closed, and document downloads are size-capped and in memory.
 """
@@ -91,6 +95,9 @@ class _HostState:
     last_request: float = 0.0
     robots: Optional[RobotsRules] = None
     robots_checked: bool = False
+    # Set when robots.txt answered a 4xx that only counts as "unavailable" on a redirect
+    # to another site: a direct request to this host is then judged as strictly as before.
+    robots_unavailable: Optional[int] = None
 
 
 @dataclass
@@ -155,9 +162,10 @@ class PoliteClient:
         """
         attempts = 0
         hops = 0
+        origin_site = _site(url)
         while True:
             if check_robots and self.settings.respect_robots:
-                self._check_robots(url)
+                self._check_robots(url, origin_site=origin_site)
             attempts += 1
             result = self._request(url, referer=referer, max_bytes=max_bytes)
             if result.status in _REDIRECTS and result.headers.get("location"):
@@ -245,8 +253,16 @@ class PoliteClient:
         finally:
             state.last_request = self.clock()
 
-    def _check_robots(self, url: str) -> None:
+    def _check_robots(self, url: str, *, origin_site: Optional[str] = None) -> None:
+        """Raise unless robots.txt lets us fetch url.
+
+        origin_site is the site of the first URL of a redirect chain; a hop to another site
+        (the auction site's document storage) reads a plain 4xx robots.txt as "unavailable".
+        """
         key, state = self._host(url)
+        redirected_elsewhere = origin_site is not None and _site(url) != origin_site
+        if state.robots_unavailable is not None and not redirected_elsewhere:
+            _raise_strict_robots_error(key, state.robots_unavailable)
         if not state.robots_checked:
             # Only a definitive answer (2xx, 404/410) is cached; errors are re-raised and
             # the next request tries again, so a failed fetch never means "allow all".
@@ -254,7 +270,14 @@ class PoliteClient:
                 result = self._request(f"{key}/robots.txt", referer=None, max_bytes=512 * 1024)
             except DocumentTooLargeError as exc:
                 raise RobotsUnreadableError(f"{key}/robots.txt larger than 512 KiB") from exc
-            if result.status in (403, 405) or _looks_like_challenge(result):
+            challenge = _looks_like_challenge(result)
+            if (redirected_elsewhere and not challenge and 400 <= result.status < 500
+                    and result.status not in (404, 410, 429)):
+                # RFC 9309 §2.3.1.3: robots.txt "unavailable" (4xx), so the host may be
+                # crawled. Only here: S3 answers 403 AccessDenied for a bucket root.
+                state.robots, state.robots_unavailable, state.robots_checked = None, result.status, True
+                return
+            if result.status in (403, 405) or challenge:
                 raise BlockedError(f"{key}/robots.txt: blocked or challenged (HTTP {result.status})")
             if result.status in (404, 410):
                 state.robots = None  # no robots.txt: everything allowed
@@ -266,6 +289,25 @@ class PoliteClient:
             state.robots_checked = True
         if state.robots is not None and not state.robots.can_fetch(self.settings.robots_token, url):
             raise RobotsDisallowedError(f"robots.txt disallows {url}")
+
+
+_IP_HOST_RE = re.compile(r"^[\d.]+$|:")
+
+
+def _site(url: str) -> str:
+    """The site a URL belongs to: its last two host labels ('www.alcopa-auction.fr' →
+    'alcopa-auction.fr'), or the whole host for an IP address or a one-label name."""
+    host = (urlsplit(url).hostname or "").lower().rstrip(".")
+    if _IP_HOST_RE.search(host):
+        return host
+    return ".".join(host.split(".")[-2:])
+
+
+def _raise_strict_robots_error(key: str, status: int) -> None:
+    """How a 4xx robots.txt is judged when it is not a redirect to another site."""
+    if status in (403, 405):
+        raise BlockedError(f"{key}/robots.txt: blocked or challenged (HTTP {status})")
+    raise RobotsUnreadableError(f"{key}/robots.txt unreadable (HTTP {status})")
 
 
 def _retry_after_seconds(value: Optional[str]) -> Optional[float]:

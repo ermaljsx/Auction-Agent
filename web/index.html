@@ -4,67 +4,154 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>Auction Agent</title>
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#EEF1F5" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0B1222" media="(prefers-color-scheme: dark)">
+<title>Vente de la semaine – Auction Agent</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/styles.css">
 <script src="/app.js" defer></script>
 </head>
 <body>
-<header class="top">
-  <div class="wrap">
-    <h1>Auction Agent</h1>
-    <p id="sale-line" class="sale-line">Chargement de l'analyse de la semaine…</p>
+<a class="skip" href="#catalogue">Aller à la liste des lots</a>
+<header class="masthead">
+  <div class="page">
+    <div class="brandbar">
+      <a class="brand" href="/">Auction Agent</a>
+      <nav aria-label="Pages du site"><a href="/about.html">Comment lire une fiche</a></nav>
+    </div>
+    <div class="sale-head">
+      <h1 id="sale-title">Vente de la semaine</h1>
+      <p id="countdown" class="countdown" hidden></p>
+    </div>
+    <p id="sale-line" class="sale-line">Chargement de l'analyse…</p>
+    <div id="tally" class="tally" hidden>
+      <div id="tally-bar" class="tally-bar" aria-hidden="true"></div>
+      <ul id="tally-legend" class="tally-legend" role="list" aria-label="Lots de la vente"></ul>
+    </div>
+    <p id="provisional" class="provisional" hidden></p>
+    <details id="status" class="status" hidden>
+      <summary id="status-summary">État de l'analyse</summary>
+      <dl id="status-list" class="status-list"></dl>
+    </details>
   </div>
 </header>
-<main class="wrap">
-  <div id="banners"></div>
+<div id="banners" class="page banners"></div>
 
-  <section aria-labelledby="status-title" class="panel">
-    <h2 id="status-title">État de l'analyse</h2>
-    <dl id="status" class="status-grid"></dl>
-  </section>
-
-  <section aria-labelledby="filters-title" class="panel">
-    <h2 id="filters-title">Filtres</h2>
-    <form id="filters" class="filters" autocomplete="off">
-      <label>Budget max (€)
-        <input id="f-budget" type="number" inputmode="numeric" min="0" step="500" placeholder="sans limite">
+<form id="filters" class="filters" role="search" aria-label="Filtrer les lots" autocomplete="off" hidden>
+  <div class="page">
+    <div class="bar-main">
+      <label class="f-q" for="f-q"><span class="sr">Rechercher un lot</span>
+        <svg class="f-q-icon" viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="8.5" cy="8.5" r="5.5"/><path d="m12.75 12.75 4.5 4.5"/></svg>
+        <input id="f-q" type="search" placeholder="Marque, modèle, n° de lot" enterkeyhint="search" spellcheck="false">
       </label>
-      <label>Carburant
+      <button type="button" id="f-toggle" class="btn f-toggle" aria-expanded="false" aria-controls="f-more">Filtres</button>
+      <p id="count" class="count" role="status" aria-live="polite"></p>
+      <button type="button" id="f-reset" class="btn f-reset" hidden>Effacer les filtres</button>
+    </div>
+    <div id="f-more" class="bar-more">
+      <label for="f-budget">Budget max (€)
+        <input id="f-budget" type="number" inputmode="numeric" min="0" step="500" placeholder="Sans limite">
+      </label>
+      <label for="f-fuel">Carburant
         <select id="f-fuel"><option value="">Tous</option></select>
       </label>
-      <label>Niveau
+      <label for="f-gearbox">Boîte
+        <select id="f-gearbox"><option value="">Toutes</option></select>
+      </label>
+      <label for="f-km">Kilométrage max
+        <select id="f-km">
+          <option value="">Tous</option>
+          <option value="50000">moins de 50 000 km</option>
+          <option value="100000">moins de 100 000 km</option>
+          <option value="150000">moins de 150 000 km</option>
+          <option value="200000">moins de 200 000 km</option>
+        </select>
+      </label>
+      <label for="f-year">Année min
+        <select id="f-year"><option value="">Toutes</option></select>
+      </label>
+      <label for="f-ct">Contrôle technique
+        <select id="f-ct">
+          <option value="">Tous</option>
+          <option value="fav">Favorable</option>
+          <option value="defav">Défavorable</option>
+          <option value="none">Absent ou illisible</option>
+        </select>
+      </label>
+      <label for="f-tier">Niveau
         <select id="f-tier">
           <option value="">Tous</option>
-          <option value="green">Profil favorable</option>
-          <option value="yellow">Profil correct</option>
+          <option value="green">Favorable</option>
+          <option value="yellow">Correct</option>
         </select>
       </label>
-      <label>Trier par
+      <label for="f-sort">Trier par
         <select id="f-sort">
           <option value="score">Note</option>
-          <option value="price">Prix estimé</option>
+          <option value="price">Prix tout compris</option>
+          <option value="km">Kilométrage</option>
+          <option value="year">Année</option>
+          <option value="lot">N° de lot</option>
         </select>
       </label>
-    </form>
-  </section>
+    </div>
+  </div>
+</form>
 
-  <section aria-labelledby="top-title">
-    <h2 id="top-title">Les meilleures affaires de la semaine</h2>
-    <p id="top-note" class="note" hidden></p>
-    <div id="top" class="cards"></div>
-  </section>
+<main id="catalogue" class="page layout" tabindex="-1" aria-busy="true">
+  <div class="list">
+    <div id="state" class="state" hidden></div>
 
-  <section aria-labelledby="rest-title">
-    <h2 id="rest-title">Autres véhicules</h2>
-    <p id="rest-note" class="note"></p>
-    <div id="rest" class="cards"></div>
-  </section>
+    <section id="sec-top" class="section" aria-labelledby="h-top">
+      <h2 id="h-top">Sélection de la semaine <span id="n-top" class="n"></span></h2>
+      <p id="note-top" class="section-note">Les mieux notées de la vente.</p>
+      <ul id="top-list" class="lots" role="list">
+        <li class="lot skel" aria-hidden="true"><div class="row"><span class="skel-plate"></span><span class="skel-lines"><span class="bar"></span><span class="bar w2"></span><span class="bar w3"></span></span></div></li>
+        <li class="lot skel" aria-hidden="true"><div class="row"><span class="skel-plate"></span><span class="skel-lines"><span class="bar"></span><span class="bar w2"></span><span class="bar w3"></span></span></div></li>
+        <li class="lot skel" aria-hidden="true"><div class="row"><span class="skel-plate"></span><span class="skel-lines"><span class="bar"></span><span class="bar w2"></span><span class="bar w3"></span></span></div></li>
+        <li class="lot skel" aria-hidden="true"><div class="row"><span class="skel-plate"></span><span class="skel-lines"><span class="bar"></span><span class="bar w2"></span><span class="bar w3"></span></span></div></li>
+      </ul>
+    </section>
+
+    <section id="sec-cards" class="section" aria-labelledby="h-cards" hidden>
+      <h2 id="h-cards">Autres voitures correctes <span id="n-cards" class="n"></span></h2>
+      <p id="note-cards" class="section-note">Notées 60 ou plus, sans défaut bloquant.</p>
+      <ul id="cards-list" class="lots" role="list"></ul>
+    </section>
+
+    <section id="sec-other" class="section" aria-labelledby="h-other" hidden>
+      <h2 id="h-other">Les autres lots</h2>
+      <p id="note-other" class="section-note">Une ligne par lot, avec le motif principal de sa note.</p>
+      <details id="g-yellow" class="group">
+        <summary>Lots corrects sans fiche <span id="n-g-yellow" class="n"></span></summary>
+        <p class="group-note">Notés 60 ou plus mais au-delà des voitures détaillées ci-dessus. Triés par n° de lot.</p>
+        <ul id="g-yellow-list" class="compact" role="list"></ul>
+      </details>
+      <details id="g-red" class="group">
+        <summary>Lots écartés <span id="n-g-red" class="n"></span></summary>
+        <p class="group-note">Note sous 60, ou défaut bloquant (CT, moteur à risque, mention dans l'annonce). Motif principal indiqué. Triés par n° de lot.</p>
+        <ul id="g-red-list" class="compact" role="list"></ul>
+      </details>
+    </section>
+
+    <div id="no-match" class="no-match" hidden>
+      <p>Aucun lot ne correspond à ces filtres.</p>
+      <button type="button" id="no-match-reset" class="btn">Effacer les filtres</button>
+    </div>
+  </div>
+  <aside id="sheet-pane" class="sheet-pane" aria-label="Fiche du lot">
+    <p class="pane-empty" hidden>Choisissez un lot pour afficher sa fiche.</p>
+  </aside>
 </main>
-<footer class="wrap foot">
-  <p id="fees" class="small"></p>
-  <p class="small">Mises à jour prévues le jeudi soir et le samedi matin (heure de Paris).
-    Projet personnel, non commercial, sans lien avec Alcopa. Informations indicatives, pas un conseil d'achat.
-    <a href="/about.html">En savoir plus</a></p>
+
+<footer class="foot">
+  <div class="page">
+    <p id="fees"></p>
+    <p>Analyse mise à jour le jeudi soir et le samedi matin (heure de Paris). Projet personnel, sans lien avec Alcopa.
+      Indications, pas un conseil d'achat : vérifiez toujours l'annonce et le véhicule avant d'enchérir.</p>
+    <p><a href="/about.html">Comment lire une fiche</a></p>
+  </div>
 </footer>
 </body>
 </html>

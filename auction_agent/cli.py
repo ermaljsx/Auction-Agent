@@ -1,6 +1,7 @@
 """Command-line interface: ``python -m auction_agent <command>``.
 
-Commands: crawl, score, report, advise (score + report), stats, capture, cleanup-legacy.
+Commands: crawl, publish, recon, score, report, advise (score + report), stats, llm-estimate,
+preview, capture, cleanup-legacy.
 ``run_crawl.py`` and ``run_advisor.py`` are thin shims kept for the README commands.
 """
 from __future__ import annotations
@@ -24,7 +25,8 @@ from . import db
 from .adapters import get_adapter_class
 from .adapters.alcopa import BASE_URL as ALCOPA_BASE_URL, WEEKLY_SALE_QUERY
 from .adapters._parsing import PARIS
-from .config import DEFAULT_SALE_URL, PROJECT_DIR, EnvFileReport, Settings, load_env_file, utc_iso, utc_now
+from .config import (DEFAULT_SALE_URL, PROJECT_DIR, EnvFileReport, Settings, load_env_file, parse_utc_iso,
+                     utc_iso, utc_now)
 from .http_client import FetchError, PoliteClient
 from .documents import sweep_quarantine
 from .ingest import CrawlOptions, run_crawl
@@ -39,14 +41,20 @@ def _settings() -> Settings:
 
 
 def llm_status(settings: Settings, env_report: Optional[EnvFileReport] = None) -> str:
-    """One line saying which model runs and where the key came from (never the key)."""
-    if not settings.openai_api_key:
+    """One line saying which provider and model run and where the key came from (never the key)."""
+    key_name = settings.llm_key_name
+    if not settings.llm_api_key:
         source = "not set (see .env.example)"
-    elif env_report is not None and "OPENAI_API_KEY" in env_report.loaded:
+    elif env_report is not None and key_name in env_report.loaded:
         source = f"from {env_report.path.name}"
     else:
         source = "from the environment"
-    return f"LLM: {settings.llm_model}, reasoning effort {settings.llm_reasoning_effort}, key {source}"
+    return (f"LLM: {settings.llm_provider} {settings.llm_model}, reasoning effort "
+            f"{settings.llm_reasoning_effort}, {key_name} {source}")
+
+
+def _cost_text(cost: Optional[float]) -> str:
+    return "cost unknown" if cost is None else f"cost about ${cost:.4f}"
 
 
 # --------------------------------------------------------------------------- crawl
@@ -132,7 +140,7 @@ def cmd_publish(args: argparse.Namespace, settings: Settings, now: Optional[date
     from .blobstore import SNAPSHOT_PATH, LocalStore, StoreError, VercelBlobStore
     from .http_client import BlockedError, RateLimitedError, RobotsDisallowedError
     from .scoring.service import rescore_all
-    from .snapshot import build_snapshot
+    from .snapshot import build_snapshot, encode
 
     try:
         store = LocalStore(Path(args.out)) if args.out else VercelBlobStore()
@@ -140,6 +148,9 @@ def cmd_publish(args: argparse.Namespace, settings: Settings, now: Optional[date
         console.print(f"[red]{escape(str(exc))}[/red]", highlight=False)
         return 2
     say = (lambda msg: console.print(msg, markup=False, highlight=False))
+    # The scheduled log shows which AI runs and where its key came from (never the key).
+    console.print("LLM: off (--no-llm)" if args.no_llm else llm_status(settings, _env_report),
+                  markup=False, highlight=False, soft_wrap=True)
     clock = (lambda: now) if now is not None else utc_now  # tests pin the time
     today = clock().astimezone(PARIS).date()
     code = 0
@@ -175,36 +186,43 @@ def cmd_publish(args: argparse.Namespace, settings: Settings, now: Optional[date
         if sale_id is None:  # blocked or no crawl: show the latest sale we know, as it was
             row = conn.execute("SELECT id FROM sales ORDER BY starts_at DESC, id DESC LIMIT 1").fetchone()
             sale_id = row["id"] if row else None
+        # Every car the site lists for this sale gets an AI verdict (scoring.service.plan_reviews).
         result = rescore_all(conn, settings, use_llm=use_llm, llm_limit=args.llm_limit, log=say,
-                             now=clock(), today=today)
+                             now=clock(), today=today, sale_id=sale_id)
         llm = {
             "enabled": use_llm and settings.llm_enabled,
+            "provider": settings.llm_provider,
             "model": settings.llm_model,
             "reasoning_effort": settings.llm_reasoning_effort,
             "triggered": result["llm_triggered"],
             "calls": result["llm_calls"],
             "cached": result["llm_cached"],
+            "tokens_in": result.get("llm_tokens_in", 0),
+            "tokens_out": result.get("llm_tokens_out", 0),
+            "cost_usd": result.get("llm_cost_usd"),
             "error": result.get("llm_error"),
             "notes": _redact_urls(result.get("notes", [])),
         }
         snapshot = build_snapshot(conn, settings, sale_id=sale_id, crawl=crawl, llm=llm, now=clock())
-    data = json.dumps(snapshot, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    data = encode(snapshot)
     try:
         store.put(SNAPSHOT_PATH, data, "application/json; charset=utf-8")
     except StoreError as exc:
         console.print(f"[red]{escape(str(exc))}[/red]", highlight=False)
         return 2
     sale = snapshot["sale"] or {}
-    say(f"Snapshot uploaded to {store.where}: sale {sale.get('external_id')} on {sale.get('date')} "
+    say(f"Snapshot {'written' if args.out else 'uploaded'} to {store.where}: sale {sale.get('external_id')} on {sale.get('date')} "
         f"({sale.get('state', 'none')}), {len(snapshot['top'])} top pick(s)"
         f"{' (provisional)' if snapshot['provisional'] else ''}, {len(snapshot['cards'])} more listed; "
-        f"crawl {crawl['status']}; AI calls {llm['calls']}, cached {llm['cached']}.")
+        f"crawl {crawl['status']}; AI calls {llm['calls']}, cached {llm['cached']}"
+        f"{', ' + _cost_text(llm['cost_usd']) if llm['calls'] else ''}.")
     if code == 0 and sale.get("state") in ("upcoming", "today"):
         problems = []
         if not snapshot["top"]:
             problems.append("no car could be put forward")
         if use_llm and not llm["enabled"]:
-            problems.append("AI review is off: set OPENAI_API_KEY in .env")
+            hint = settings.llm_other_key_hint
+            problems.append(f"AI review is off: set {settings.llm_key_name} in .env" + (f" ({hint})" if hint else ""))
         elif use_llm and llm["error"]:
             problems.append(f"AI review stopped ({llm['error']} error, see notes)")
         elif use_llm and snapshot["top"] and llm["calls"] + llm["cached"] == 0:
@@ -213,6 +231,11 @@ def cmd_publish(args: argparse.Namespace, settings: Settings, now: Optional[date
             console.print(f"  [yellow]attention[/yellow] {escape(problem)}", highlight=False)
         if problems:
             code = 4
+        coverage = snapshot["llm"].get("coverage") or {}
+        if use_llm and llm["enabled"] and not llm["error"] and coverage.get("with_verdict", 0) < coverage.get("listed", 0):
+            # Informative only (exit code unchanged): e.g. the budget ran out or a batch failed.
+            console.print(f"  [yellow]attention[/yellow] AI verdicts on {coverage['with_verdict']} of the "
+                          f"{coverage['listed']} listed cars (see notes)", highlight=False)
     return code
 
 
@@ -249,13 +272,15 @@ def cmd_score(args: argparse.Namespace, settings: Settings) -> int:
     from .scoring.service import rescore_all
 
     status = "LLM: off (--no-llm)" if args.no_llm else llm_status(settings, _env_report)
-    console.print(status, markup=False, highlight=False)
+    console.print(status, markup=False, highlight=False, soft_wrap=True)
     with db.open_db(settings.db_path) as conn:
         result = rescore_all(conn, settings, use_llm=not args.no_llm, llm_limit=args.llm_limit,
                              log=lambda m: console.print(m, markup=False, highlight=False))
+    calls = result['llm_calls']
     console.print(f"Scored {result['scored']} vehicles "
                   f"(green {result['green']}, yellow {result['yellow']}, red {result['red']}); "
-                  f"LLM calls {result['llm_calls']}, cached {result['llm_cached']}.")
+                  f"LLM calls {calls}, cached {result['llm_cached']}"
+                  f"{', ' + _cost_text(result.get('llm_cost_usd')) if calls else ''}.")
     for note in result.get("notes", []):
         console.print(f"  [yellow]note[/yellow] {escape(note)}", highlight=False)
     return 0
@@ -296,7 +321,63 @@ def cmd_stats(args: argparse.Namespace, settings: Settings) -> int:
         console.print("  sales (id = value for --sale-id):")
         for s in sales:
             console.print(f"    {s['id']:>4}  {s['house']} {s['external_id']}  {s['room'] or ''}  "
-                          f"{(s['starts_at'] or '')[:10]}  {s['status']}", markup=False, highlight=False)
+                          f"{_paris_day(s['starts_at'])}  {s['status']}", markup=False, highlight=False)
+    return 0
+
+
+def cmd_llm_estimate(args: argparse.Namespace, settings: Settings) -> int:
+    """Offline AI cost estimate: real payloads from the database, no client, no network."""
+    from .scoring.estimate import estimate_llm_cost, format_estimate, resolve_sale_id
+
+    if args.runs_per_week <= 0:
+        console.print("[red]--runs-per-week must be above 0.[/red]")
+        return 2
+    with db.open_db(settings.db_path) as conn:
+        sale_id = resolve_sale_id(conn, args.sale_id)
+        if sale_id is None:
+            what = f"No sale {args.sale_id} in the database" if args.sale_id is not None else "No sale in the database"
+            console.print(f"{what}: run a crawl first (python -m auction_agent stats lists the sales).",
+                          markup=False, highlight=False)
+            return 3
+        est = estimate_llm_cost(conn, settings, sale_id=sale_id, all_cars=args.all,
+                                runs_per_week=args.runs_per_week)
+    for line in format_estimate(est):
+        console.print(line, markup=False, highlight=False, soft_wrap=True)  # keep the table on one line
+    return 0
+
+
+def _paris_day(starts_at: Optional[str]) -> str:
+    """The sale day in Paris: a Monday sale is stored as Sunday 23:00 UTC."""
+    starts = parse_utc_iso(starts_at) if starts_at else None
+    return starts.astimezone(PARIS).date().isoformat() if starts else ""
+
+
+def cmd_preview(args: argparse.Namespace, settings: Settings) -> int:
+    """Serve the site on this computer with a local (or the uploaded) snapshot."""
+    from .preview import blob_source, folder_source, make_server
+
+    if args.blob:
+        source, what = blob_source(), "the private Vercel Blob store (BLOB_READ_WRITE_TOKEN)"
+    else:
+        folder = Path(args.snapshot) if args.snapshot else settings.data_dir / "snapshot-local"
+        source, what = folder_source(folder), str(folder / "snapshot" / "latest.json")
+    try:
+        server = make_server(source, port=args.port)
+    except (OSError, OverflowError) as exc:
+        console.print(f"[red]Port {args.port} is not free ({escape(exc.__class__.__name__)}): "
+                      f"try --port {args.port + 1}[/red]", highlight=False)
+        return 2
+    url = f"http://127.0.0.1:{server.server_address[1]}/"
+    console.print(f"Site preview: {url}  (snapshot: {what})", markup=False, highlight=False)
+    console.print("Only this computer can open it. Press Ctrl+C to stop.", markup=False, highlight=False)
+    if args.open:
+        webbrowser.open(url)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        console.print("Preview stopped.")
+    finally:
+        server.server_close()
     return 0
 
 
@@ -374,6 +455,16 @@ def cmd_cleanup_legacy(args: argparse.Namespace, settings: Settings) -> int:
 # --------------------------------------------------------------------------- parser
 
 
+def _port(value: str) -> int:
+    try:
+        port = int(value)
+    except ValueError:
+        port = -1
+    if not 0 <= port <= 65535:
+        raise argparse.ArgumentTypeError(f"{value!r} is not a port (0 to 65535)")
+    return port
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="auction_agent", description="Auction-Agent command line")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -429,6 +520,24 @@ def build_parser() -> argparse.ArgumentParser:
 
     stats = sub.add_parser("stats", help="Database statistics")
     stats.set_defaults(func=cmd_stats)
+
+    estimate = sub.add_parser("llm-estimate",
+                              help="Estimate the AI review cost from the stored cars (offline, no API call)")
+    estimate.add_argument("--sale-id", type=int, default=None,
+                          help="Sale (database id or the auction house's number; default: the latest sale)")
+    estimate.add_argument("--all", action="store_true",
+                          help="Price a review of every active car of the sale instead of the listed ones")
+    estimate.add_argument("--runs-per-week", type=float, default=2.0,
+                          help="Scoring runs per week (default: 2, Thursday and Saturday)")
+    estimate.set_defaults(func=cmd_llm_estimate)
+
+    preview = sub.add_parser("preview", help="Open the site on this computer with a local snapshot")
+    preview.add_argument("--snapshot", help="Folder written by `publish --out` (default: data/snapshot-local)")
+    preview.add_argument("--blob", action="store_true",
+                         help="Show the snapshot uploaded to the private Vercel Blob store instead")
+    preview.add_argument("--port", type=_port, default=8765, help="Local port (default: 8765)")
+    preview.add_argument("--open", action="store_true", help="Open it in the browser")
+    preview.set_defaults(func=cmd_preview)
 
     capture = sub.add_parser("capture", help="Save redacted real pages as test fixtures")
     capture.add_argument("--url", help="Sale page URL")

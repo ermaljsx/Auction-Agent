@@ -29,10 +29,24 @@ ISO_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 # such as /salle-de-vente-encheres/beauvais/10206 still crawls that one sale.
 DEFAULT_SALE_URL = "/salle-de-vente-encheres/beauvais"
 
-# Cheapest OpenAI model not scheduled for retirement as of 2026-10-14 (prices and
-# deprecations: see README "Optional: OpenAI review"). Override with LLM_MODEL.
-DEFAULT_LLM_MODEL = "gpt-6-luna"
-# "off" leaves the parameter out, for models without reasoning.
+# AI review providers (owner decision 2026-11-07): Anthropic Claude by default, OpenAI kept
+# as a switch (LLM_PROVIDER=openai).
+# - claude-haiku-5-5: the cheapest current Claude model, $0.10 / $0.50 per 1M input / output
+#   tokens for prompts of 100K tokens or fewer, $0.50 / $2.50 above (claude-api skill, Claude
+#   Haiku 5.5 migration guide, read 2026-11-07; check https://platform.claude.com/docs/en/about-claude/pricing).
+# - gpt-6-luna: the cheapest OpenAI model not scheduled for retirement as of 2026-10-14, same
+#   list price (see README "Switching back to OpenAI").
+# Override the model with LLM_MODEL; scoring/pricing.py holds the price table.
+LLM_PROVIDERS = ("anthropic", "openai")
+DEFAULT_LLM_PROVIDER = "anthropic"
+DEFAULT_LLM_MODELS = {"anthropic": "claude-haiku-5-5", "openai": "gpt-6-luna"}
+DEFAULT_LLM_MODEL = DEFAULT_LLM_MODELS[DEFAULT_LLM_PROVIDER]
+# Claude: "low" runs adaptive thinking at low effort, "none" turns thinking off (cheapest).
+# OpenAI: "none" is the cheapest; "off" leaves the parameter out, for models without reasoning.
+DEFAULT_REASONING_EFFORTS = {"anthropic": "low", "openai": "none"}
+LLM_KEY_NAMES = {"anthropic": "ANTHROPIC_API_KEY", "openai": "OPENAI_API_KEY"}
+# Every value valid for at least one provider; a value the chosen provider does not take
+# (e.g. "off" with Claude) is reported when the client is built, without stopping the run.
 REASONING_EFFORTS = ("off", "none", "minimal", "low", "medium", "high", "xhigh", "max")
 
 DEFAULT_USER_AGENT = (
@@ -233,11 +247,14 @@ class Settings:
     yellow_min: int = 60
     top_n: int = 10
 
-    # LLM review (optional): enabled when OPENAI_API_KEY is set
+    # LLM review (optional): enabled when the chosen provider's key is set.
+    # Note: replace(llm_provider=...) does not re-resolve the model or the effort; pass them too.
+    llm_provider: str = DEFAULT_LLM_PROVIDER  # 'anthropic' | 'openai'
+    anthropic_api_key: str = field(default="", repr=False)
     openai_api_key: str = field(default="", repr=False)
     llm_model: str = DEFAULT_LLM_MODEL
-    llm_reasoning_effort: str = "none"
-    llm_limit: int = 60
+    llm_reasoning_effort: str = DEFAULT_REASONING_EFFORTS[DEFAULT_LLM_PROVIDER]
+    llm_limit: int = 80  # about 50 cars are listed on the site; the rest is margin and retries
     llm_batch_size: int = 20
 
     @classmethod
@@ -245,6 +262,9 @@ class Settings:
         data_dir = Path(overrides["data_dir"]) if "data_dir" in overrides else _env_path(
             "AUCTION_AGENT_DATA_DIR", PROJECT_DIR / "data"
         )
+        # The model and effort defaults follow the provider (an unknown one fails validate()).
+        provider = str(overrides.get("llm_provider")
+                       or os.environ.get("LLM_PROVIDER", "").strip().lower() or DEFAULT_LLM_PROVIDER)
         values: dict[str, Any] = dict(
             data_dir=data_dir,
             db_path=_env_path("AUCTION_AGENT_DB", data_dir / "auction.db"),
@@ -262,10 +282,13 @@ class Settings:
             engine_risk_max_tier=os.environ.get("ENGINE_RISK_MAX_TIER", "yellow"),
             green_min=_env_int("TIER_GREEN_MIN", 80),
             yellow_min=_env_int("TIER_YELLOW_MIN", 60),
+            llm_provider=provider,
+            anthropic_api_key=clean_secret(os.environ.get("ANTHROPIC_API_KEY")),
             openai_api_key=clean_secret(os.environ.get("OPENAI_API_KEY")),
-            llm_model=os.environ.get("LLM_MODEL", "").strip() or DEFAULT_LLM_MODEL,
-            llm_reasoning_effort=os.environ.get("LLM_REASONING_EFFORT", "").strip().lower() or "none",
-            llm_limit=_env_int("LLM_LIMIT", 60),
+            llm_model=os.environ.get("LLM_MODEL", "").strip() or DEFAULT_LLM_MODELS.get(provider, ""),
+            llm_reasoning_effort=(os.environ.get("LLM_REASONING_EFFORT", "").strip().lower()
+                                  or DEFAULT_REASONING_EFFORTS.get(provider, "none")),
+            llm_limit=_env_int("LLM_LIMIT", 80),
         )
         values.update(overrides)
         settings = cls(**values)
@@ -279,6 +302,8 @@ class Settings:
             raise ValueError("ENGINE_RISK_MAX_TIER must be 'yellow' or 'red'")
         if not (0 < self.yellow_min < self.green_min <= 100):
             raise ValueError("Tier thresholds must satisfy 0 < yellow_min < green_min <= 100")
+        if self.llm_provider not in LLM_PROVIDERS:
+            raise ValueError("LLM_PROVIDER must be 'anthropic' or 'openai'")
         if self.llm_reasoning_effort not in REASONING_EFFORTS:
             raise ValueError(f"LLM_REASONING_EFFORT must be one of: {', '.join(REASONING_EFFORTS)}")
 
@@ -286,5 +311,30 @@ class Settings:
         return dataclasses.replace(self, **changes)
 
     @property
+    def llm_key_name(self) -> str:
+        """The environment variable that holds the chosen provider's key."""
+        return LLM_KEY_NAMES.get(self.llm_provider, "the API key")
+
+    @property
+    def llm_api_key(self) -> str:
+        """The chosen provider's key ('' when not set)."""
+        if self.llm_provider == "anthropic":
+            return self.anthropic_api_key
+        if self.llm_provider == "openai":
+            return self.openai_api_key
+        return ""
+
+    @property
     def llm_enabled(self) -> bool:
-        return bool(self.openai_api_key and self.llm_model)
+        return bool(self.llm_api_key and self.llm_model)
+
+    @property
+    def llm_other_key_hint(self) -> str:
+        """When only the other provider's key is set: the setting that would use it ('' otherwise)."""
+        if self.llm_api_key:
+            return ""
+        if self.llm_provider == "anthropic" and self.openai_api_key:
+            return "OPENAI_API_KEY is set: set LLM_PROVIDER=openai to keep using OpenAI"
+        if self.llm_provider == "openai" and self.anthropic_api_key:
+            return "ANTHROPIC_API_KEY is set: remove LLM_PROVIDER=openai to use Claude"
+        return ""

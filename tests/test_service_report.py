@@ -60,7 +60,7 @@ def seed(conn, n=8, base_price=10_000.0, comments=None):
 
 
 def llm_settings(settings):
-    return settings.replace(openai_api_key="k", llm_model="fake-model")
+    return settings.replace(anthropic_api_key="k", llm_model="fake-model")
 
 
 def test_every_vehicle_gets_a_tier(settings):
@@ -76,8 +76,28 @@ def test_llm_skipped_without_api_key(settings):
     with db.open_db(settings.db_path) as conn:
         seed(conn)
         out = rescore_all(conn, settings, today=TODAY, now=NOW)
-    assert out["llm_calls"] == 0
-    assert any("OPENAI_API_KEY" in n and ".env.example" in n for n in out["notes"])
+    assert out["llm_calls"] == 0 and out["llm_provider"] == "anthropic"
+    assert any("ANTHROPIC_API_KEY" in n and ".env.example" in n for n in out["notes"])
+    assert not any("OPENAI_API_KEY" in n for n in out["notes"])
+
+
+def test_llm_skipped_without_the_openai_key_when_openai_is_chosen(settings):
+    s = settings.replace(llm_provider="openai", llm_model="gpt-6-luna", llm_reasoning_effort="none",
+                         anthropic_api_key="sk-ant-x")
+    with db.open_db(s.db_path) as conn:
+        seed(conn)
+        out = rescore_all(conn, s, today=TODAY, now=NOW)
+    note = next(n for n in out["notes"] if "LLM review skipped" in n)
+    assert "OPENAI_API_KEY" in note and "remove LLM_PROVIDER=openai" in note and "sk-ant-x" not in note
+
+
+def test_a_leftover_openai_key_gets_a_switch_hint(settings):
+    s = settings.replace(openai_api_key="sk-old")
+    with db.open_db(s.db_path) as conn:
+        seed(conn)
+        out = rescore_all(conn, s, today=TODAY, now=NOW)
+    note = next(n for n in out["notes"] if "LLM review skipped" in n)
+    assert "ANTHROPIC_API_KEY" in note and "LLM_PROVIDER=openai" in note and "sk-old" not in note
 
 
 def test_llm_results_are_cached_and_price_changes_cost_nothing(settings):
@@ -130,8 +150,10 @@ def test_parse_reviews_validates_output():
 
 
 def test_scoring_imports_without_llm_sdks():
-    code = ("import sys; sys.modules['openai'] = None; sys.modules['google'] = None; "
-            "import auction_agent.scoring.service, auction_agent.cli; print('ok')")
+    code = ("import sys; sys.modules['openai'] = None; sys.modules['anthropic'] = None; "
+            "sys.modules['google'] = None; "
+            "import auction_agent.scoring.service, auction_agent.cli, auction_agent.scoring.llm_anthropic, "
+            "auction_agent.scoring.llm_openai, auction_agent.scoring.estimate; print('ok')")
     result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, encoding="utf-8", cwd=PROJECT_ROOT)
     assert result.stdout.strip() == "ok", result.stderr
 
@@ -174,3 +196,77 @@ def test_cli_end_to_end(settings, monkeypatch, tmp_path):
     with db.open_db(tmp_path / "data" / "auction.db") as conn:
         assert conn.execute("SELECT count(*) FROM assessments").fetchone()[0] == 3
     assert cli.main(["stats"]) == 0
+
+
+# ------------------------------------------------------------------ site redesign (snapshot v2)
+
+import pytest  # noqa: E402
+
+from auction_agent.report import ct_line, short_trim  # noqa: E402
+
+
+@pytest.mark.parametrize("model, trim, expected", [
+    ("DS7 CROSSBACK", "DS7 CROSSBACK PURETECH 180 EAT8 GRAND CHIC", "PURETECH 180 EAT8 GRAND CHIC"),
+    ("GRAND SCÉNIC IV", "GRAND SCENIC IV DCI 110 ENERGY BUSINESS 7 PL", "DCI 110 ENERGY BUSINESS 7 PL"),
+    ("GRAND SCENIC IV BUSINESS", "GRAND SCÉNIC IV DCI 110 ENERGY BUSINESS", "DCI 110 ENERGY BUSINESS"),
+    ("3008 BUSINESS", "3008 BLUEHDI 130CH S&S EAT8 ALLURE BUSINESS", "BLUEHDI 130CH S&S EAT8 ALLURE BUSINESS"),
+    ("GRAND SCENIC IV", "GRAND SCENIC IV - TCE 140", "TCE 140"),
+    ("SERIE 1 F20 LCI", "116D EFFICIENTDYNAMICS EDITION", "116D EFFICIENTDYNAMICS EDITION"),
+    ("YARIS", "YARIS", None),
+    ("YARIS", "  ", None),
+    ("YARIS", None, None),
+    (None, "CLIO 1.5 DCI", "CLIO 1.5 DCI"),
+])
+def test_short_trim(model, trim, expected):
+    assert short_trim(model, trim) == expected
+
+
+def _reason(code):
+    return {"code": code}
+
+
+@pytest.mark.parametrize("ct, codes, expected", [
+    ({"result": "FAVORABLE", "counts": {"minor": 0}}, ["ct_favorable"], "CT favorable, sans défaillance"),
+    ({"result": "FAVORABLE", "counts": {"minor": 1}}, ["ct_favorable"], "CT favorable, 1 défaillance mineure"),
+    ({"result": "FAVORABLE", "counts": {"minor": 3}}, ["ct_favorable"], "CT favorable, 3 défaillances mineures"),
+    ({"result": "DEFAVORABLE_MAJEURE", "counts": {"major": 2}}, ["ct_major"], "CT défavorable, 2 défaillances majeures"),
+    ({"result": "DEFAVORABLE_CRITIQUE", "counts": {"critical": 1}}, ["ct_critique"], "CT défavorable, 1 défaillance critique"),
+    ({"result": "UNKNOWN", "counts": {}}, ["ct_non_lu"], "CT illisible"),
+    ({"result": "FAVORABLE", "nature": "volontaire", "counts": {}}, ["ct_non_lu"], "CT volontaire, pas retenu pour la note"),
+    (None, ["ct_non_lu"], "CT illisible"),
+    (None, ["ct_not_required"], "CT pas encore exigé (moins de 4 ans)"),
+    (None, ["ct_absent"], "Pas de CT publié"),
+])
+def test_ct_line(ct, codes, expected):
+    assert ct_line(ct, [_reason(c) for c in codes]) == expected
+
+
+def test_report_reasons_no_longer_repeat_the_gates(settings):
+    from auction_agent.report import build_report_context
+    with db.open_db(settings.db_path) as conn:
+        seed(conn, comments="Kilométrage non garanti")
+        rescore_all(conn, settings, today=TODAY, now=NOW, use_llm=False)
+        ctx = build_report_context(conn, settings, now=NOW)
+    for card in ctx["cards"]:
+        gates = {g["text"] for g in card["gates"]}
+        assert "Kilométrage non garanti" in gates
+        assert not gates & {r["text"] for r in card["reasons"]}
+        assert gates <= {r["text"] for r in card["all_reasons"] if r["pillar"] == "gate"}
+        assert card["subtitle"] == "1.5 HYBRIDE 116H" and card["ct_line"].startswith("CT favorable")
+        assert card["detail_raw"]["ct_doc"] == "parsed" and card["ct_raw"]["result"] == "FAVORABLE"
+
+
+def test_a_binding_gate_is_not_repeated_in_the_top_reasons(settings):
+    """A gate that caps the score has the largest negative delta: it would lead the reasons
+    (HTML report, v1 snapshot) if the filter did not leave gates out."""
+    from auction_agent.report import build_report_context
+    with db.open_db(settings.db_path) as conn:
+        seed(conn, comments="Moteur HS")
+        rescore_all(conn, settings, today=TODAY, now=NOW, use_llm=False)
+        ctx = build_report_context(conn, settings, now=NOW)
+    binding = [r for c in ctx["cards"] for r in c["all_reasons"] if r["pillar"] == "gate" and r["delta"] < 0]
+    assert binding, "the seed must produce a binding gate"
+    for card in ctx["cards"]:
+        gates = {g["text"] for g in card["gates"]}
+        assert "Mention « moteur hs » dans les commentaires" in gates
+        assert not gates & {r["text"] for r in card["reasons"]}, card["reasons"]

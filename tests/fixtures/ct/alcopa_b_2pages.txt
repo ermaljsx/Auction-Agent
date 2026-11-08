@@ -1,0 +1,38 @@
+ZA99000301
+Contrôle technique périodique 03/11/2026 26990301
+Défavorable pour défaillances majeures
+DEFAILLANCES MAJEURES :
+4.1.1.b.2. ÉTAT ET FONCTIONNEMENT (PHARES) : Système de projection
+02/01/2027 fortement défectueux ou manquant (AVG)
+8.4.1.a.2. PERTES DE LIQUIDES : Fuite excessive de liquide autre
+Contre-visite que de l'eau (AV)
+DEFAILLANCES MINEURES :
+[IMMAT] (F) 10/05/2020 10/05/2016 4.5.2.a.1. RÉGLAGE (FEUX DE BROUILLARD AVANT) : Mauvaise
+orientation horizontale d'un feu de brouillard avant (D)
+[VIN] M1 VP 5.2.3.h.1. PNEUMATIQUES : Le système de contrôle de la pression des
+pneumatiques fonctionne mal ou le pneumatique est manifestement
+[VIN] Attention il existe une suite à cette page du procès verbal
+AVANT ARRIERE
+154020 G D G D
+Ripage (-8 à +8m/km) +0.3m/km
+CT : 02/01/2027 Feux de croisement (-2.5% à -0.5%) -1.1% -1.4%
+N° d'agrément : S099Y002 26990301
+ZA99000301
+
+ZA99000302
+Contrôle technique périodique 03/11/2026 26990301
+Défavorable pour défaillances majeures Suite du procès verbal
+sous-gonflé (ARG)
+6.2.1.a.1. ÉTAT DE LA CABINE ET DE LA CARROSSERIE : Panneau ou
+02/01/2027 élément endommagé (AR)
+Kilométrages relevés lors des précédents contrôles techniques
+Contre-visite depuis le 20 mai 2018 :
+21/04/2020 : 70400km / 25/04/2022 : 101900km / 28/04/2024 : 129800km
+Attention ce procès verbal contient 2 pages
+GARAGE CONTROLE FICTIF
+AVANT ARRIERE
+154020 G D G D
+Ripage (-8 à +8m/km) +0.3m/km
+CT : XX/XX/XXXX Feux de croisement (-2.5% à -0.5%) -1.1% -1.4%
+N° d'agrément : XXXXXXXX 26990301
+ZA99000302

@@ -8,18 +8,24 @@ from __future__ import annotations
 
 import hashlib
 import io
+import json
+import re
+import sqlite3
 import time
 import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 import pdfplumber
 
+from . import db
+from .battery_parser import PARSER_VERSION as BATTERY_PARSER_VERSION
+from .battery_parser import parse_battery_certificate
 from .ct_parser import PARSER_VERSION, parse_controle_technique
 from .http_client import DocumentTooLargeError, PoliteClient
 from .config import Settings
-from .privacy import redact
+from .privacy import redact, redact_battery_text
 
 
 @dataclass
@@ -91,17 +97,140 @@ def process_document_bytes(
         doc.parse_status = "empty_text"  # scanned/image-only: "CT non lu" downstream
         return doc
     # Parse the original text in memory (redaction could hide mileage or dates), then
-    # store only redacted text and redacted defect labels.
+    # store only redacted text and redacted defect labels. A battery certificate also loses
+    # the link to its up-to-date edition, a PDF that shows the VIN and plate unredacted.
+    doc.text = redact_battery_text(text) if doc_type == "battery" else redact(text)
     if doc_type == "ct":
-        parsed = parse_controle_technique(text)
-        for defect in parsed["defects"]:
-            defect["label"] = redact(defect["label"]) or ""
+        parsed = parse_ct(text)
+        if parse_failed(parsed):
+            # A parser bug, not an unreadable PV: keep any previous good copy (ingest does
+            # not replace a document with a failed one), and leave the version empty so the
+            # next scoring run re-reads the stored text once the parser is fixed.
+            doc.parse_status = "failed"
+            doc.error = ", ".join(parsed["warnings"])
+            return doc
         doc.parsed = parsed
         doc.parser_version = PARSER_VERSION
         doc.parse_confidence = parsed["parse_confidence"]
-    doc.text = redact(text)
+    elif doc_type == "battery":
+        parsed = parse_battery(text)
+        if parse_failed(parsed):  # same rule as the CT: a parser bug is not a reading
+            doc.parse_status = "failed"
+            doc.error = ", ".join(parsed["warnings"])
+            return doc
+        doc.parsed = parsed
+        doc.parser_version = BATTERY_PARSER_VERSION
+        doc.parse_confidence = parsed["parse_confidence"]
     doc.parse_status = "parsed"
     return doc
+
+
+def parse_failed(parsed: dict[str, Any]) -> bool:
+    """True when the parser hit an internal error (its summary is then empty, not a reading)."""
+    return any(str(w).startswith("parse_error") for w in parsed.get("warnings", []))
+
+
+def _version_key(version: Optional[str], family: str = "ct") -> tuple:
+    """Order parser versions of one family: "ct-2.10" > "ct-2.2" > "ct-2.0" > None or an
+    unknown format (another family's version included)."""
+    m = re.fullmatch(rf"{re.escape(family)}-(\d+)\.(\d+)(?:\.(\d+))?", version or "")
+    return tuple(int(g or 0) for g in m.groups()) if m else ()
+
+
+def parse_ct(text: Optional[str]) -> dict[str, Any]:
+    """Parse a CT text into what is stored: the summary, with redacted defect labels."""
+    parsed = parse_controle_technique(text)
+    for defect in parsed["defects"]:
+        defect["label"] = redact(defect["label"]) or ""
+    return parsed
+
+
+def parse_battery(text: Optional[str]) -> dict[str, Any]:
+    """Parse a battery-certificate text into what is stored (the summary holds no identifier)."""
+    return parse_battery_certificate(text)
+
+
+def reparse_stale_ct_documents(conn: sqlite3.Connection, *, batch_size: int = 50) -> dict[str, int]:
+    """Re-parse every CT document read by an older parser version (see ``_reparse_stale``)."""
+    # ``parse_ct`` is looked up here, at call time, so tests can replace the module attribute.
+    return _reparse_stale(conn, doc_type="ct", version=PARSER_VERSION, family="ct", parse=parse_ct,
+                          clean_text=redact, batch_size=batch_size)
+
+
+def reparse_stale_battery_documents(conn: sqlite3.Connection, *, batch_size: int = 50) -> dict[str, int]:
+    """Re-parse every battery certificate read by an older parser (or none yet), from its
+    stored text; the rewrite also removes the certificate link from that text."""
+    return _reparse_stale(conn, doc_type="battery", version=BATTERY_PARSER_VERSION, family="bat",
+                          parse=parse_battery, clean_text=redact_battery_text, batch_size=batch_size)
+
+
+def _reparse_stale(
+    conn: sqlite3.Connection,
+    *,
+    doc_type: str,
+    version: str,
+    family: str,
+    parse: Callable[[Optional[str]], dict[str, Any]],
+    clean_text: Callable[[Optional[str]], Optional[str]],
+    batch_size: int,
+) -> dict[str, int]:
+    """Re-parse every ``doc_type`` document read by an older parser version, from its stored text.
+
+    The stored text is already redacted, so it is the only input: the PDF is never kept.
+    It is cleaned again first (``clean_text`` is idempotent, so this only applies rules
+    added since the document was fetched). Only rows with no version or an older one of the
+    same family are read: a row written by a newer parser (another checkout running against
+    the same database) is never downgraded. Parsing happens outside the database lock; each batch is then
+    written in one short write transaction, and a row changed meanwhile (by a crawl, say)
+    is left alone. Cheap when nothing is stale: a single SELECT. Never raises on odd text.
+
+    A document whose parse fails (an exception, or the parser's own ``parse_error``
+    summary) keeps its previous parse and version, so it is retried at the next run. When
+    the database is busy, the batches already written stay written and the rest wait for
+    the next run (``postponed``).
+    """
+    current = _version_key(version, family)
+    stale = [row[0] for row in conn.execute(
+        """SELECT id, parser_version FROM documents WHERE doc_type = ? AND text IS NOT NULL
+           AND (parser_version IS NULL OR parser_version <> ?) ORDER BY id""", (doc_type, version))
+        if _version_key(row[1], family) < current]
+    reparsed = failed = postponed = 0
+    for start in range(0, len(stale), batch_size):
+        ids = stale[start:start + batch_size]
+        rows = conn.execute(
+            f"SELECT id, text, parser_version FROM documents WHERE id IN ({','.join('?' * len(ids))})", ids
+        ).fetchall()
+        updates = []
+        for row in rows:
+            try:
+                text = clean_text(row["text"]) or row["text"]
+                parsed = parse(text)
+                if parse_failed(parsed):
+                    raise ValueError(parsed["warnings"])
+                payload = json.dumps(parsed, ensure_ascii=False)
+            except Exception:  # never let one odd document stop the rescore
+                failed += 1
+                continue
+            updates.append((text, payload, parsed["parse_confidence"], version,
+                            row["id"], row["text"], row["parser_version"]))
+        if not updates:
+            continue
+        written = 0
+        try:
+            with db.write_tx(conn):
+                for values in updates:
+                    cur = conn.execute(
+                        """UPDATE documents SET text = ?, parsed_json = ?, parse_confidence = ?,
+                               parser_version = ?, parse_status = 'parsed'
+                           WHERE id = ? AND text = ? AND parser_version IS ?""",
+                        values,
+                    )
+                    written += cur.rowcount
+        except sqlite3.OperationalError:  # busy: this batch is rolled back, earlier ones stay
+            postponed = len(updates) + len(stale[start + batch_size:])
+            break
+        reparsed += written
+    return {"reparsed": reparsed, "failed": failed, "postponed": postponed}
 
 
 def fetch_document(

@@ -56,3 +56,21 @@ reports/*.html
 .DS_Store
 Thumbs.db
 *.log
+
+# Real CT texts used by tests/test_ct_real_conformance.py: they name CT centres and controllers
+tests/fixtures/ct/real/
+
+# Real battery-certificate texts used by tests/test_battery_real_conformance.py (git-ignored like the CT texts)
+tests/fixtures/battery/real/
+
+# Never publish secrets, databases or local tool state (the repository is public)
+*.env
+*.bak
+*.db
+*.sqlite
+*.sqlite3
+*.pem
+*.key
+.vercel/
+.claude/settings.local.json
+.pytest_cache/

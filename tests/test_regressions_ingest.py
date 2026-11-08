@@ -52,7 +52,9 @@ def test_migration_from_v2_adds_columns(settings):
         conn.execute("PRAGMA user_version = 2")
     with db.open_db(settings.db_path) as conn:
         cols = {r[1] for r in conn.execute("PRAGMA table_info('vehicles')")}
-        assert {"late_ct_checked_at", "doc_attempts"} <= cols
+        assert {"late_ct_checked_at", "doc_attempts", "damages_json"} <= cols
+        assert "detail_json" in {r[1] for r in conn.execute("PRAGMA table_info('assessments')")}
+        assert "cost_usd" in {r[1] for r in conn.execute("PRAGMA table_info('llm_assessments')")}
         assert conn.execute("PRAGMA user_version").fetchone()[0] == db.SCHEMA_VERSION
 
 

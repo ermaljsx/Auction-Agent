@@ -1,0 +1,40 @@
+ZA99000201
+Contrôle technique périodique 12/10/2026 26990201
+Défavorable pour défaillances critiques DEFAILLANCES CRITIQUES :
+5.2.3.d.3. PNEUMATIQUES : Pneumatique gravement endommagé ou entaillé : corde
+12/10/2026 visible (AVG)
+DEFAILLANCES MAJEURES :
+Contre-visite 1.2.1.b.2. PERFORMANCES DU FREIN DE STATIONNEMENT : Efficacité insuffisante
+d'un côté (AR)
+S099Y002 5.3.3.a.2. TUBES DE POUSSÉE, JAMBES DE FORCE, TRIANGLES ET BRAS DE
+SUSPENSION : Mauvaise attache d'un composant au châssis ou à
+099Y5678 l'essieu (AVD)
+GARAGE CONTROLE FICTIF
+Contre-visite DEFAILLANCES MINEURES :
+5 IMPASSE DU BANC D'ESSAI
+4.5.2.a.1. RÉGLAGE (FEUX DE BROUILLARD AVANT) : Mauvaise
+99991 BOURG-TEST
+orientation horizontale d'un feu de brouillard avant (G)
+Tel : 0199000000 6.2.10.a.1. GARDE-BOUE, DISPOSITIFS ANTI-PROJECTIONS : Manquants,
+mal fixés ou gravement rouillés (AV)
+Kilométrages relevés lors des précédents contrôles techniques
+depuis le 20 mai 2018 :
+14/03/2020 : 98500km / 20/03/2022 : 131200km / 18/03/2024 :
+162900km /
+19/09/2026 : 190050km
+Afin de faciliter les campagnes de rappel « graves », vos données de contact
+sont collectées (texte d'information du centre).
+AB-123-CD (F) 08/01/2019 30/06/2014
+PEUGEOT 3008
+VF3TESTAB00000003 M1 VP
+M10TESTVP000B02 GO
+Certificat d'immatriculation présenté
+AVANT ARRIERE
+190112 G D G D
+Ripage (-8 à +8m/km) -0.9m/km
+Forces verticales 702daN 655daN
+AB-123-CD Taux d'efficacité global (=58%): 66%
+CT : 12/10/2026 Emissions à l'échappement
+Opacité des fumées (0.50m-1) C1: <0.10 - C2: <0.10
+N° d'agrément : S099Y002 26990201
+ZA99000201

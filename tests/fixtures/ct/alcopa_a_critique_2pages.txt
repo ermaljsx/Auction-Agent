@@ -1,0 +1,65 @@
+ÒpL!4wÓ[*$*]ÒpL!5xÓ
+PROCÈS-VERBAL Auto
+DE CONTRÔLE TECHNIQUE Sécurité
+Exemplaire conservé par le centre
+N° D'IMPRIMÉ C 99000103
+NATURE DU CONTRÔLE (3) DATE DU CONTRÔLE N° DU PROCÈS-VERBAL
+Contrôle technique périodique 21/10/2026 26990103
+(7) RÉSULTAT DU CONTRÔLE (6) DÉFAILLANCES ET NIVEAUX DE GRAVITÉ
+Défavorable pour défaillances critiques
+Défaillances critiques :
+(8) LIMITE DE VALIDITÉ DU CONTRÔLE RÉALISÉ 1.1.16.c.3. CYLINDRES OU ÉTRIERS DE FREINS : Défaut du cylindre ou de l'étrier AVG
+21/10/2026 Défaillances majeures :
+NATURE DU PROCHAIN CONTRÔLE 2.1.5.a.2. DIRECTION ASSISTÉE : Fuite de liquide ou fonctions affectées
+Contre-visite 5.3.1.a.2. RESSORTS ET STABILISATEURS : Mauvaise attache des ressorts ou stabilisateurs au
+IDENTIFICATION DU CENTRE DE CONTRÔLE châssis ou à l’essieu AVG
+N° D'AGRÉMENT : S099X001 6.1.1.a.2. ÉTAT GÉNÉRAL DU CHÂSSIS : Fissure ou déformation d'un longeron
+(9)RAISON SOCIALE : SARL BANC D'ESSAI FICTIF
+(3) COORDONNÉES : 12 RUE DES ESSAIS Défaillances mineures :
+ZA DU PARC IMAGINAIRE 4.5.2.a.1. RÉGLAGE (FEUX DE BROUILLARD AVANT) : Mauvaise orientation horizontale d’un feu
+99990 VILLE-TEST de brouillard avant AVD
+(9) IDENTITÉ DU CONTRÔLEUR
+N° D'AGRÉMENT : 099X1234
+SIGNATURE :
+IDENTIFICATION DU VÉHICULE
+Date de 1ère mise
+(2) Immatriculation et pays Date d'immatriculation en circulation
+[IMMAT] (F) 03/05/2026 17/09/2011
+Marque Désignation commerciale
+CITROEN C4
+(1) N° dans la série du type (VIN) (5) Catégorie internationale Genre
+[VIN] M1 VP Contrôle de cohérence du kilométrage avec les kilométrages relevés lors des contrôles techniques
+précédents non réalisé
+Type / CNIT Energie
+[VIN]
+Document(s) présenté(s)
+Certificat d'immatriculation
+ou un huissier de justice Attention, il existe une suite à cette page du procès-verbal
+(4)KILOMÉTRAGE RELEVÉ MESURES RÉALISÉES ET VALEURS LIMITES CORRESPONDANTES
+203400 AVANT ARRIERE
+G D G D
+Ripage (-8 à +8 m/km) : -1.1 m/km
+INFORMATION SUR LE CONTRÔLE TECHNIQUE DÉFAVORABLE
+PROCÈS-VERBAL N° : DATE : Forces verticales : 690 daN 455 daN
+CT:21/10/2026
+N° D’AGRÉMENT : S099X001 26990103
+
+ÒpL!5xÓ
+PROCÈS-VERBAL Auto
+DE CONTRÔLE TECHNIQUE Sécurité
+Exemplaire conservé par le centre
+N° D'IMPRIMÉ C 99000104
+NATURE DU CONTRÔLE (3) DATE DU CONTRÔLE N° DU PROCÈS-VERBAL
+Contrôle technique périodique 21/10/2026 26990103
+(7) RÉSULTAT DU CONTRÔLE (6) DÉFAILLANCES ET NIVEAUX DE GRAVITÉ
+Défavorable pour défaillances critiques Suite du procès-verbal
+(8) LIMITE DE VALIDITÉ DU CONTRÔLE RÉALISÉ
+Attention ce procès-verbal contient 2 pages
+21/10/2026
+(4)KILOMÉTRAGE RELEVÉ MESURES RÉALISÉES ET VALEURS LIMITES CORRESPONDANTES
+203400 AVANT ARRIERE
+G D G D
+Ripage (-8 à +8 m/km) : -1.1 m/km
+XXXXXXXXX Frein de stationnement Taux d'efficacité (≥18 %) : 21 %
+XXXXXXXXXX
+N° D’AGRÉMENT : XXXXXXXX 26990103

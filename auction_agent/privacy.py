@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import logging
 import os
 import re
 import secrets
@@ -32,10 +33,20 @@ _VIN_ANYCASE = re.compile(
 )
 # VIN written in groups: "VF3 ABCDE FGH123456" (upper case, at most 3 spaces).
 _VIN_SPACED = re.compile(rf"(?<![A-Za-z0-9])[{_VIN_CHARS}](?:[ ]?[{_VIN_CHARS}]){{16}}(?![A-Za-z0-9])")
+# VIN in groups joined by one kind of punctuation, any case: "VF3-ABCDE-FGH123456",
+# "VF3.ABC.DE1.234.56789", "vf3_abcde_fgh123456" (17 VIN characters, checked in redact).
+_VIN_PUNCT = re.compile(
+    rf"(?<![A-Za-z0-9._-])[{_VIN_CHARS}]+([-._])[{_VIN_CHARS}]+(?:\1[{_VIN_CHARS}]+){{0,7}}(?![A-Za-z0-9])",
+    re.IGNORECASE,
+)
 # SIV plates (2009+): AB-123-CD, ab-123-cd, AB123CD, AB 123 CD.
 _SIV_DASH = re.compile(rf"(?<![A-Za-z0-9])[{_SIV_L}]{{2}}-\d{{3}}-[{_SIV_L}]{{2}}(?![A-Za-z0-9])", re.IGNORECASE)
 _SIV_GLUED = re.compile(rf"(?<![A-Za-z0-9])[{_SIV_L}]{{2}}\d{{3}}[{_SIV_L}]{{2}}(?![A-Za-z0-9])", re.IGNORECASE)
 _SIV_UPPER = re.compile(rf"(?<![A-Z0-9])[{_SIV_L}]{{2}}[- ]?\d{{3}}[- ]?(?!{_UNITS}\b)[{_SIV_L}]{{2}}(?![A-Z0-9])")
+# Any case when the same separator joins both parts: "ab 123 cd", "AB.123.CD", "AB_123_CD".
+_SIV_SEP = re.compile(
+    rf"(?<![A-Za-z0-9])[{_SIV_L}]{{2}}([ ._])\d{{3}}\1(?!{_UNITS}\b)[{_SIV_L}]{{2}}(?![A-Za-z0-9])", re.IGNORECASE
+)
 # FNI plates (pre-2009): 1234 AB 75 / 123 ABC 2A / 12 AB 971. Units and dates excluded,
 # so "98 765 KM 12/03/2026" is left alone.
 _FNI_RE = re.compile(
@@ -48,10 +59,83 @@ _OWNER_FIELD_RE = re.compile(
     re.IGNORECASE | re.MULTILINE,
 )
 _DASHES = dict.fromkeys(map(ord, "‐‑‒–—―−"), "-")
-_MONEY_RE = re.compile(r"\d[\d   .,]*\s*(?:(?:€|EUR\b|euros?\b)(?:\s*(?:HT|TTC)\b)?|(?:HT|TTC)\b)", re.IGNORECASE)
+# Amounts, thousands included: "1 250 €", "6 900 HT", "2 k€", "3 K€", "2 k euros".
+_MONEY_RE = re.compile(r"\d[\d   .,]*\s*(?:(?:k\s?)?(?:€|EUR\b|euros?\b)(?:\s*(?:HT|TTC)\b)?|(?:HT|TTC)\b)", re.IGNORECASE)
 _URL_RE = re.compile(r"(?:https?://|www\.)\S+", re.IGNORECASE)
-_PHONE_RE = re.compile(r"(?<!\d)(?:\+33\s?|0)[1-9](?:[\s.\-]?\d{2}){4}(?!\d)")
+# French phone numbers: "06 12 34 56 78", "+33 6…", "+33 (0)6…", "0033 6…".
+_PHONE_RE = re.compile(r"(?<![\d+])(?:(?:\+|00)\s?33\s?(?:\(0\)\s?)?|0)[1-9](?:[\s.\-]?\d{2}){4}(?!\d)")
 _EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
+
+# The voluntary-inspection "CV" form prints the registration holder's name and postal
+# address without any label, after the "<VIN> <energy>" and "<km> <model>" lines and
+# before the function list "0 - IDENTIFICATION DU VÉHICULE". The defect column runs down
+# beside it, so a holder line can carry a defect on its right: only the part before the
+# defect is personal data, and the defect (code, header) must survive for the re-parse.
+_CV_FORM_RE = re.compile(r"^\s*N[°o]\s*d.imprim[ée]\s+CV\b", re.IGNORECASE | re.MULTILINE)
+_CV_VIN_LINE = re.compile(  # "<VIN> <energy>", the energy being GO, GPL, ES/GP... or missing
+    rf"^\s*(?:\[VIN\]|(?=(?:[A-Z]*\d){{3}})[{_VIN_CHARS}]{{17}})(?:\s+\S+)?\s*$")
+_CV_KM_MODEL_LINE = re.compile(r"^\s*(?:\d{1,7}|non\s+relev\S*)\s+\S", re.IGNORECASE)
+_CV_FUNCTIONS_LINE = re.compile(r"^\s*0\s*-\s*IDENTIFICATION\b", re.IGNORECASE)
+_CV_PLATE_LINE = re.compile(r"\(F\)\s+\d{2}/\d{2}/\d{4}")  # the top of the vehicle block
+# Where the defect column starts on a merged line: "<n> - <code>", a code, a section header.
+_CV_DEFECT_START = re.compile(
+    r"(?:(?<!\d)\d{1,2}\s*-\s*)?(?<![\d.])\d{1,2} ?[.,] ?\d{1,2} ?[.,] ?\d{1,2} ?[.,] ?[A-Za-z] ?[.,] ?\d(?!\d)"
+    r"|D[ÉE]FAILLANCES?\b",
+    re.IGNORECASE,
+)
+_PERSONAL = "[DONNEES PERSONNELLES]"
+_log = logging.getLogger(__name__)
+
+
+def _redact_holder_line(line: str) -> str:
+    cr = "\r" if line.endswith("\r") else ""
+    body = line[:-1] if cr else line
+    if not body.strip() or body.strip() == _PERSONAL:
+        return line
+    m = _CV_DEFECT_START.search(body)
+    if m is None:
+        return _PERSONAL + cr
+    if not body[:m.start()].strip():
+        return line  # only defect text on this line
+    return f"{_PERSONAL} {body[m.start():]}{cr}"
+
+
+def _redact_cv_holder(text: str) -> str:
+    if not _CV_FORM_RE.search(text):
+        return text
+    lines = text.split("\n")
+    end = next((j for j, line in enumerate(lines) if _CV_FUNCTIONS_LINE.match(line)), None)
+    window = range(max(0, end - 12), end) if end is not None else range(len(lines))
+    vin = next((i for i in reversed(window) if _CV_VIN_LINE.match(lines[i])), None)
+    if vin is not None:
+        start = vin + 1
+        if start < len(lines) and _CV_KM_MODEL_LINE.match(lines[start]):
+            start += 1  # the km and the model are kept: the parser reads the km there
+        stop = end if end is not None else min(len(lines), start + 4)
+    elif end is not None:
+        # The form is recognised but its vehicle lines are not: fail closed, redacting the
+        # lines just above the function list, up to the plate line.
+        start = end
+        while start > 0 and end - start < 6 and not _CV_PLATE_LINE.search(lines[start - 1]):
+            start -= 1
+        stop = end
+        _log.warning("CV form: vehicle lines not recognised, %d line(s) above the function list redacted",
+                     stop - start)
+    else:
+        _log.warning("CV form: holder block not found, nothing redacted")
+        return text
+    if vin is not None and end is None:
+        _log.warning("CV form: function list not found, %d line(s) after the vehicle lines redacted", stop - start)
+    for j in range(start, stop):
+        lines[j] = _redact_holder_line(lines[j])
+    return "\n".join(lines)
+
+
+def _punct_vin(m: re.Match[str]) -> str:
+    """``_VIN_PUNCT`` match → "[VIN]" when its characters make a VIN (17, 3+ digits and letters)."""
+    chars = re.sub(r"[-._]", "", m.group(0))
+    digits = sum(c.isdigit() for c in chars)
+    return "[VIN]" if len(chars) == 17 and digits >= 3 and len(chars) - digits >= 3 else m.group(0)
 
 
 def redact(text: Optional[str]) -> Optional[str]:
@@ -67,10 +151,11 @@ def redact(text: Optional[str]) -> Optional[str]:
                               and m.group(0).isupper()) else m.group(0),
         out,
     )
-    for rx in (_SIV_DASH, _SIV_GLUED, _SIV_UPPER):
+    out = _VIN_PUNCT.sub(_punct_vin, out)
+    for rx in (_SIV_DASH, _SIV_GLUED, _SIV_UPPER, _SIV_SEP):
         out = rx.sub("[IMMAT]", out)
     out = _FNI_RE.sub("[IMMAT]", out)
-    return out
+    return _redact_cv_holder(out)
 
 
 def scrub_for_llm(text: Optional[str]) -> Optional[str]:
@@ -82,6 +167,27 @@ def scrub_for_llm(text: Optional[str]) -> Optional[str]:
     out = _MONEY_RE.sub("[MONTANT]", out)
     out = _PHONE_RE.sub("[TEL]", out)
     return _EMAIL_RE.sub("[EMAIL]", out)
+
+
+# A token ending in ".pdf": the end of a document link that the PDF text layer wrapped onto
+# the next line ("https://certificate.<provider>/certificate <model>" + "s/<token>.pdf").
+_PDF_TOKEN_RE = re.compile(r"(?<!\S)\S*\.pdf\b", re.IGNORECASE)
+
+
+def redact_document_links(text: Optional[str]) -> Optional[str]:
+    """Replace links and wrapped ``….pdf`` link tails with ``[LIEN]``. Idempotent.
+
+    A battery certificate prints the address of its own up-to-date edition, and that PDF
+    shows the VIN and the plate unredacted: the link must not survive in stored text.
+    """
+    if not text:
+        return text
+    return _PDF_TOKEN_RE.sub("[LIEN]", _URL_RE.sub("[LIEN]", text))
+
+
+def redact_battery_text(text: Optional[str]) -> Optional[str]:
+    """What is stored for a battery certificate: ``redact`` plus the document links removed."""
+    return redact_document_links(redact(text))
 
 
 def normalise_identifier(value: Optional[str]) -> Optional[str]:

@@ -172,7 +172,7 @@ def _card(sale_id, text):
 
 def test_undated_sale_this_week_never_falls_through_to_next_week():
     """F1: if this week's sale cannot be dated, choose nothing (the calendar is tried next)."""
-    html = "<html><body>" + _card("10231", "Véhicules Utilitaires et Tourisme - Lun. 2 nov.") + _card(
+    html = "<html><body>" + _card("10231", "Véhicules Utilitaires et Tourisme - date à venir") + _card(
         "10250", "Lundi 9 novembre 2026 : Véhicules Utilitaires et Tourisme") + "</body></html>"
     assert pick_weekly_sale(parse_sale_links(html, TODAY, "beauvais"), TODAY) is None
     http = FakeHttp({ROOM: html, "/calendrier-des-ventes": CALENDAR})
@@ -202,6 +202,60 @@ def test_french_sale_card_dates(text, expected):
     """F3: the first '<number> <word>' is not always the date; '1<sup>er</sup>' reads as '1 er'."""
     today = TODAY if expected.year == 2026 else date(2027, 1, 26)
     assert _sale_date(text, today) == expected
+
+
+# ------------------------------------------------------------------ live recon, 2026-11-07
+
+# The card text the real room page gave (recon from the owner's PC): short day and month, no year.
+REAL_CARD = "Beauvais , 693 lots lun. 9 nov. Véhicules Utilitaires et Tourisme Frais en sus"
+SATURDAY = date(2026, 11, 7)
+
+
+@pytest.mark.parametrize("text,today,expected", [
+    (REAL_CARD, SATURDAY, date(2026, 11, 9)),
+    ("lun. 9 nov.", SATURDAY, date(2026, 11, 9)),
+    ("Lun. 9 Nov", SATURDAY, date(2026, 11, 9)),
+    ("lun. 4 janv.", date(2026, 12, 30), date(2027, 1, 4)),  # next year near new year
+    ("lun. 1er févr.", date(2027, 1, 26), date(2027, 2, 1)),
+    ("lun. 7 déc.", date(2026, 12, 1), date(2026, 12, 7)),
+    ("lun. 7 dec.", date(2026, 12, 1), date(2026, 12, 7)),
+    ("lun. 13 avr.", date(2026, 4, 8), date(2026, 4, 13)),
+    ("lun. 6 juil.", date(2026, 7, 1), date(2026, 7, 6)),
+    ("lun. 7 sept.", date(2026, 9, 2), date(2026, 9, 7)),
+    ("lun. 12 oct.", date(2026, 10, 7), date(2026, 10, 12)),
+    ("lun. 9 nov. 2026", date(2026, 1, 1), date(2026, 11, 9)),  # a short month with a year is exact
+])
+def test_short_french_month_cards(text, today, expected):
+    assert _sale_date(text, today) == expected
+
+
+@pytest.mark.parametrize("text", [
+    "Beauvais , 693 lots Véhicules Utilitaires et Tourisme",  # lots, no date
+    "mar. 10 lots",                                          # 'mar.' is mardi, never a month
+    "12 mar. 9h30",                                          # 'mar' stays out of the month table
+])
+def test_text_without_a_month_has_no_date(text):
+    assert _sale_date(text, SATURDAY) is None
+
+
+def test_real_room_card_resolves_this_mondays_sale():
+    """The live room page of 2026-11-07 printed 'chosen: none'; it must pick sale 10209."""
+    html = ("<html><body><div class='sale'><span>Beauvais , 693 lots</span><span>lun. 9 nov.</span>"
+            "<span>Véhicules Utilitaires et Tourisme</span><span>Frais en sus</span>"
+            "<a href='/salle-de-vente-encheres/beauvais/10209'>Voir la vente</a></div></body></html>")
+    http = FakeHttp({ROOM: html, "/calendrier-des-ventes": CALENDAR})
+    sale, diag = AlcopaAdapter(http).resolve_next_sale("beauvais", today=SATURDAY)
+    assert sale is not None and sale.external_id == "10209"
+    assert diag["chosen"] == {"id": "10209", "date": "2026-11-09"}
+    assert http.count("/calendrier-des-ventes") == 0  # found on the room page: no second request
+
+
+def test_sale_page_title_with_a_short_month_is_dated():
+    from auction_agent.adapters._parsing import month_fr, parse_fr_date
+    assert parse_fr_date("Vente du lun. 9 nov. 2026 à Beauvais") == date(2026, 11, 9)
+    assert parse_fr_date("Vente du 9 novembre 2026 à Beauvais") == date(2026, 11, 9)
+    assert parse_fr_date("9 mar. 2026") is None  # 'mar.' is ambiguous (mardi): no guess
+    assert month_fr("Nov.") == 11 and month_fr("novembre") == 11 and month_fr("lots") == 0
 
 
 def test_quiet_crawl_never_prints_urls_from_notes(settings, monkeypatch, capsys):

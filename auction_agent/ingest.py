@@ -247,6 +247,10 @@ def _detail_fields(detail: LotDetail, stub: LotStub, key: bytes) -> dict[str, An
     raw = {k: redact(v) for k, v in detail.raw_specs.items()}
     fields["raw_specs_json"] = json.dumps(raw, ensure_ascii=False) if raw else None
     fields["photo_count"] = detail.photo_count
+    # Only {zone, kind} pairs: the adapter never copies the damage photos or staff ids.
+    # None (no readable list on the page) keeps what is stored; [] is stored as "[]".
+    fields["damages_json"] = (json.dumps(detail.damages, ensure_ascii=False)
+                              if detail.damages is not None else None)
     return fields
 
 

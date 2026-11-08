@@ -16,10 +16,10 @@ from auction_agent.scoring.llm import (
     LLMBatchError,
     LLMConfigError,
     LLMTransientError,
-    OpenAIClient,
     ReviewBatch,
     parse_reviews,
 )
+from auction_agent.scoring.llm_openai import OpenAIClient
 from auction_agent.scoring.service import rescore_all
 from tests.test_scoring import TODAY
 from tests.test_service_report import NOW, FakeClient, llm_settings, seed
@@ -401,9 +401,15 @@ def test_a_failed_batch_does_not_stop_the_others_and_is_retried_alone(settings):
         out = rescore_all(conn, s, today=TODAY, now=NOW, client=third)
         assert third.calls == [] and any("failed on twice" in n for n in out["notes"])
 
-        # Changing the reasoning effort (the usual fix) gives it a fresh start.
+        # Switching provider gives it a fresh start: the failure key includes the provider.
+        other_provider = BatchFailClient({keys[0]})
+        other_provider.provider = "openai"
+        rescore_all(conn, s, today=TODAY, now=NOW, client=other_provider)
+        assert [[p["key"] for p in c] for c in other_provider.calls] == [[keys[0]]]
+
+        # So does changing the reasoning effort (the usual fix; "low" is the default).
         fourth = FakeClient()
-        rescore_all(conn, s.replace(llm_reasoning_effort="low"), today=TODAY, now=NOW, client=fourth)
+        rescore_all(conn, s.replace(llm_reasoning_effort="medium"), today=TODAY, now=NOW, client=fourth)
         assert [[p["key"] for p in c] for c in fourth.calls] == [[keys[0]]]
 
 
@@ -464,20 +470,28 @@ def test_client_is_built_from_settings(settings, monkeypatch):
             built.append((api_key, model, reasoning_effort))
             self.model, self.reasoning_effort, self.notes = model, reasoning_effort, ["env note"]
 
-    monkeypatch.setattr("auction_agent.scoring.service.OpenAIClient", Recording)
-    s = settings.replace(openai_api_key="sk-x", llm_model="gpt-5.4-nano", llm_reasoning_effort="low")
+    monkeypatch.setattr("auction_agent.scoring.llm_openai.OpenAIClient", Recording)
+    s = settings.replace(llm_provider="openai", openai_api_key="sk-x", llm_model="gpt-5.4-nano",
+                         llm_reasoning_effort="low")
     with db.open_db(s.db_path) as conn:
         seed(conn)
         out = rescore_all(conn, s, today=TODAY, now=NOW)
     assert built == [("sk-x", "gpt-5.4-nano", "low")] and "env note" in out["notes"]
+    assert out["llm_provider"] == "openai"
 
 
-def test_malformed_key_falls_back_to_rules(settings):
-    s = settings.replace(openai_api_key="sk bad key")
+@pytest.mark.parametrize("provider,changes,name", [
+    ("openai", {"openai_api_key": "sk bad key", "llm_model": "gpt-6-luna", "llm_reasoning_effort": "none"},
+     "OPENAI_API_KEY"),
+    ("anthropic", {"anthropic_api_key": "sk bad key"}, "ANTHROPIC_API_KEY"),
+])
+def test_malformed_key_falls_back_to_rules(settings, provider, changes, name):
+    s = settings.replace(llm_provider=provider, **changes)
     with db.open_db(s.db_path) as conn:
         seed(conn)
         out = rescore_all(conn, s, today=TODAY, now=NOW)
-        assert any("malformed" in n for n in out["notes"]) and "sk bad key" not in " ".join(out["notes"])
+        assert any("malformed" in n and name in n for n in out["notes"])
+        assert "sk bad key" not in " ".join(out["notes"]) and out["llm_error"] == "config"
         assert conn.execute("SELECT count(*) FROM assessments").fetchone()[0] == 8
 
 

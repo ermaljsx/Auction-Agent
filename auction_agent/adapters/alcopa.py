@@ -15,20 +15,21 @@ and must be re-validated on pages captured with ``python -m auction_agent captur
 """
 from __future__ import annotations
 
+import json
 import re
 import unicodedata
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlencode, urljoin, urlsplit
 
-from bs4 import BeautifulSoup, Tag
+from bs4 import BeautifulSoup, NavigableString, Tag
 
 from ..config import DEFAULT_SALE_URL
 from ..http_client import BlockedError, FetchError, RateLimitedError, RobotsDisallowedError
 from ._parsing import (
-    MONTHS_FR,
     PARIS,
     first_int,
+    month_fr,
     parse_eur,
     parse_fr_date,
     parse_km,
@@ -225,8 +226,11 @@ def parse_card(card: Tag) -> Optional[LotStub]:
             stub.gearbox = normalise_gearbox(" ".join(lines[1:]))
 
     footer = card.select_one(".card-footer")
+    footer_text = ""
     if footer is not None:
-        footer_text = footer.get_text(" ", strip=True)
+        # Real cards spread "Mise à prix : 15 700" and "€" over several lines (about 80
+        # spaces apart), so whitespace is collapsed before the price patterns run.
+        footer_text = re.sub(r"\s+", " ", footer.get_text(" ", strip=True))
         lot = re.search(r"Lot\s*n?°?\s*(\d+)", footer_text, re.IGNORECASE)
         if lot and int(lot.group(1)) > 0:
             stub.lot_number = int(lot.group(1))
@@ -258,6 +262,12 @@ def parse_card(card: Tag) -> Optional[LotStub]:
     current = card.select_one("[data-current-price]")
     if current is not None:
         stub.current_price_attr = parse_plain_amount(current.get("data-current-price"))
+    else:
+        # Once someone bids, a card shows "Enchère courante : X €" instead of the opening
+        # price: the same meaning as the detail page's form[data-current-price].
+        bid = re.search(r"Ench[eè]re courante\s*:\s*([^€]{0,20}€)", footer_text, re.IGNORECASE)
+        if bid:
+            stub.current_price_attr = parse_eur(bid.group(1))
     return stub
 
 
@@ -266,16 +276,21 @@ def parse_sale_page(html: str, page: int = 1) -> dict[str, Any]:
     soup = _soup(html)
     title_el = soup.select_one("h5.text-prim")
     title = title_el.get_text(" ", strip=True) if title_el else ""
+    # "573 R\u00e9sultat(s)" counts the lots of the category we list (category_view=VP), while
+    # "Nombre de lots : 693" counts the whole sale, vans included (seen on 2026-11-07), so
+    # the filtered count comes first and the sale total is only a fallback.
     total = None
-    m = re.search(r"Nombre de lots\s*:?\s*(\d{1,3}(?:[ \u00a0\u202f.]\d{3})+|\d+)", soup.get_text(" "))
-    if m:
-        total = first_int(m.group(1))
-    else:
-        count_el = soup.select_one(".founded_items .nb_items")
-        if count_el is not None:
-            total = first_int(count_el.get_text())
-
+    count_el = soup.select_one(".founded_items .nb_items")
+    if count_el is not None:
+        total = first_int(count_el.get_text())
     cards = soup.select(".col-12.col-lg-6.align-items-stretch") or soup.select(".card.h-100")
+    if not total and cards:
+        total = None  # "0 Résultat(s)" beside cards contradicts itself: not a count to trust
+    if total is None:
+        m = re.search(r"Nombre de lots\s*:?\s*(\d{1,3}(?:[ \u00a0\u202f.]\d{3})+|\d+)", soup.get_text(" "))
+        if m:
+            total = first_int(m.group(1))
+
     stubs: list[LotStub] = []
     failures = 0
     for card in cards:
@@ -368,7 +383,12 @@ def parse_detail_page(html: str, external_id: str) -> LotDetail:
         detail.vin = next((v for v in map(find_vin, specs.values()) if v), None)
     detail.fields = fields
 
-    # Cross-check the product id against the embedded damage JSON, when present.
+    # Cross-check the product id against the damage list's JSON (the only place real pages
+    # carry it), then against any embedded <script> JSON (older layouts).
+    damages, damage_ids = _parse_damages(soup, external_id)
+    if damage_ids and external_id not in damage_ids:
+        raise ParseError(f"Page product_id {sorted(damage_ids)[0]} does not match {external_id}")
+    detail.damages = damages
     for script in soup.find_all("script"):
         m = re.search(r'"product_id"\s*:\s*"?(\d+)', script.get_text())
         if m and m.group(1) != external_id:
@@ -391,20 +411,20 @@ def parse_detail_page(html: str, external_id: str) -> LotDetail:
             seen_types.add(doc_type)
             detail.documents.append(DocumentRef(doc_type, url))
 
-    photos = {str(a.get("href")) for a in soup.select("a[data-gallery='pictures']") if a.get("href")}
+    # The gallery also holds one picture per damage (".../damages/<file>.jpg"): not counted.
+    photos = {str(a.get("href")) for a in soup.select("a[data-gallery='pictures']")
+              if a.get("href") and "/damages/" not in str(a.get("href"))}
     detail.photo_count = len(photos) or (1 if soup.select_one("img[itemprop='image']") else 0)
 
-    header = soup.find(lambda t: t.name in ("h3", "h4") and "commentaires" in t.get_text().lower())
+    header = soup.find(lambda t: t.name in ("h3", "h4") and _norm_label(t.get_text(" ")).startswith("commentaire"))
     if header is not None:
-        parts = []
-        for sib in header.find_next_siblings():
-            if sib.name in ("h2", "h3", "h4"):
-                break
-            text = sib.get_text(" ", strip=True)
-            if text:
-                parts.append(text)
-        if parts:
-            detail.comments = " ".join(parts)[:2000]
+        detail.comments = _section_text(header)
+
+    warranty = soup.select_one("#warranty")
+    if warranty is not None:  # "Garantie Sérénité de 3 mois incluse*": the formula, not just the badge
+        label = re.sub(r"\s+", " ", warranty.get_text(" ", strip=True)).strip(" *")
+        if label and not re.search(r"\bsans\s+garantie\b|\bnon\s+garanti", label, re.IGNORECASE):
+            fields["warranty"] = (redact(label) or "")[:80] or None
 
     bat = soup.select_one(".progress-value")
     if bat is not None:
@@ -415,17 +435,111 @@ def parse_detail_page(html: str, external_id: str) -> LotDetail:
     form = soup.select_one("form[data-current-price]")
     if form is not None:
         fields["current_price_attr"] = parse_plain_amount(form.get("data-current-price"))
-    page_text = soup.get_text(" ", strip=True)
+    page_text = re.sub(r"\s+", " ", soup.get_text(" ", strip=True))
     m = re.search(r"Mise à prix\s*:?\s*(--|[^€]{0,20}€)", page_text)
     if m:
         fields["starting_price"] = parse_eur(m.group(1))
     if re.search(r"batterie\s+(?:en\s+)?location|location\s+de\s+(?:la\s+)?batterie", page_text, re.IGNORECASE):
         fields["battery_leased"] = 1
 
-    crumb = soup.select_one("a[href*='/salle-de-vente-encheres/'], a[href*='/vente-encheres-en-ligne/']")
-    if crumb is not None and is_alcopa_url(urljoin(BASE_URL, str(crumb["href"]))):
-        detail.sale_url = urljoin(BASE_URL, str(crumb["href"]))
+    # The page menu links every room ("/salle-de-vente-encheres/beauvais") before the
+    # breadcrumb: only a link carrying a sale id is this lot's sale.
+    for crumb in soup.select("a[href*='/salle-de-vente-encheres/'], a[href*='/vente-encheres-en-ligne/']"):
+        url = urljoin(BASE_URL, str(crumb["href"]))
+        if is_alcopa_url(url) and _SALE_PATH_RE.match(urlsplit(url).path):
+            detail.sale_url = url
+            break
     return detail
+
+
+_HEADINGS = ("h1", "h2", "h3", "h4", "h5", "h6")
+
+
+def _section_text(header: Tag) -> Optional[str]:
+    """Text after a heading up to the next heading: tags *and* bare text nodes.
+
+    Real pages put the seller comment as a bare text node after "<h3>Commentaires</h3>"
+    (no <p>), which a loop over sibling tags never saw.
+    """
+    parts: list[str] = []
+    for node in header.next_siblings:
+        if isinstance(node, Tag):
+            if node.name in _HEADINGS:
+                break
+            text = node.get_text(" ", strip=True)
+        elif type(node) is NavigableString:  # skips HTML comments, CDATA, doctype...
+            text = str(node).strip()
+        else:
+            continue
+        if text:
+            parts.append(text)
+    joined = re.sub(r"\s+", " ", " ".join(parts)).strip()
+    return joined[:2000] or None
+
+
+_DAMAGE_MAX_ITEMS = 80
+_DAMAGE_TEXT_MAX = 60
+_LINKISH = re.compile(r"https?:|www\.|/|@", re.IGNORECASE)
+
+
+def _flag_set(value: Any) -> bool:
+    return str(value).strip().lower() in ("1", "true", "yes")
+
+
+def _clean_damage_text(value: Any) -> Optional[str]:
+    """A zone or damage-type label, or None. Never a link or a file name."""
+    if not isinstance(value, str):
+        return None
+    text = re.sub(r"\s+", " ", unicodedata.normalize("NFC", value)).strip()
+    if not text or _LINKISH.search(text):
+        return None
+    text = (redact(text) or "").strip()[:_DAMAGE_TEXT_MAX].strip()
+    return text or None
+
+
+def _parse_damages(soup: BeautifulSoup, external_id: str) -> tuple[Optional[list[dict[str, str]]], set[str]]:
+    """The body-damage list ("Défauts esthétiques") and the product ids it names.
+
+    Each item of ``div.js-damage-proges[data-source]`` also holds photo URLs, storage
+    bucket and file names, staff user ids and timestamps: only ``zone_label`` and
+    ``type_label`` are read, into a new ``{"zone", "kind"}`` dict. Deleted or hidden items
+    are skipped, and items of another product are dropped (the caller refuses a page that
+    names only other products). Unreadable JSON gives ``None``, never an exception.
+    """
+    divs = soup.select("div.js-damage-proges[data-source]")
+    if not divs:
+        return None, set()
+    items: list[Any] = []
+    for div in divs:
+        try:
+            data = json.loads(str(div.get("data-source", "")))
+        except (TypeError, ValueError, RecursionError):
+            return None, set()
+        if not isinstance(data, list):
+            return None, set()
+        items.extend(data)
+    product_ids: set[str] = set()
+    damages: list[dict[str, str]] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        raw_pid = item.get("product_id")
+        pid = str(raw_pid).strip() if isinstance(raw_pid, (int, str)) and not isinstance(raw_pid, bool) else ""
+        if pid:
+            product_ids.add(pid)
+            if pid != external_id:
+                continue
+        damage = item.get("damage")
+        if (_flag_set(item.get("is_deleted")) or str(item.get("is_show")).strip().lower() in ("0", "false")
+                or not isinstance(damage, dict) or _flag_set(damage.get("is_deleted"))):
+            continue
+        zone = _clean_damage_text(damage.get("zone_label"))
+        kind = _clean_damage_text(damage.get("type_label"))
+        if zone is None and kind is None:
+            continue
+        if len(damages) < _DAMAGE_MAX_ITEMS:
+            damages.append({"zone": zone or "Zone inconnue", "kind": kind or "Défaut"})
+    return damages, product_ids
 
 
 # --------------------------------------------------------------------------- adapter
@@ -443,17 +557,18 @@ def room_from_url(url: str) -> Optional[str]:
     return m.group("room") if m else None
 
 
-_DAY_MONTH_RE = re.compile(r"(\d{1,2})(?:er)?\s+([a-zéûè]+)\b(?!\s+\d{4})", re.IGNORECASE)
+_DAY_MONTH_RE = re.compile(r"(\d{1,2})(?:er)?\s+([a-zéûè]+)\b(?!\.?\s+\d{4})", re.IGNORECASE)
 
 
 def _sale_date(text: str, today: date) -> Optional[date]:
-    """Full date if present, else 'lundi 2 novembre' with the year that keeps it near today."""
+    """Full date if present, else 'lundi 2 novembre' or 'lun. 2 nov.' with the year that
+    keeps it near today."""
     text = re.sub(r"(\d)\s+er\b", r"\1er", text, flags=re.IGNORECASE)  # '1<sup>er</sup>' → '1 er'
     full = parse_fr_date(text)
     if full:
         return full
-    for m in _DAY_MONTH_RE.finditer(text):  # skip '85 véhicules', '9h30 lundi'…
-        month = MONTHS_FR.get(m.group(2).lower(), 0)
+    for m in _DAY_MONTH_RE.finditer(text):  # skip '85 véhicules', '693 lots', '9h30 lundi'…
+        month = month_fr(m.group(2))
         if month:
             break
     else:
@@ -710,14 +825,16 @@ class AlcopaAdapter(AuctionAdapter):
         html = self.http.get_text(stub.detail_url)
         return parse_detail_page(html, stub.external_id)
 
+    def fee_split(self, price: float, sale_kind: str, buyer: str, vat_regime: str) -> dict[str, float]:
+        """VAT a private buyer cannot recover on an "HT récupérable" car, and the room fees
+        (14.4 % TTC, at least 360 €; none online). Not rounded: ``fee_model`` rounds the sum."""
+        vat = price * self.VAT_RATE if (vat_regime == "ht_recuperable" and buyer == "particulier") else 0.0
+        fees = 0.0 if sale_kind == "online" else max(price * self.ROOM_FEE_RATE_TTC, self.ROOM_FEE_MIN_TTC)
+        return {"vat": vat, "fees": fees}
+
     def fee_model(self, price: float, sale_kind: str, buyer: str, vat_regime: str) -> float:
-        base = price
-        if vat_regime == "ht_recuperable" and buyer == "particulier":
-            base = price * (1 + self.VAT_RATE)  # a private buyer cannot recover VAT
-        if sale_kind == "online":
-            return round(base, 2)
-        fee = max(price * self.ROOM_FEE_RATE_TTC, self.ROOM_FEE_MIN_TTC)
-        return round(base + fee, 2)
+        split = self.fee_split(price, sale_kind, buyer, vat_regime)  # one source of truth
+        return round(price + split["vat"] + split["fees"], 2)
 
 
 def default_sale_url() -> str:

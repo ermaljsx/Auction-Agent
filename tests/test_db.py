@@ -151,3 +151,73 @@ def test_reclaim_space_shrinks_file(settings):
         db.reclaim_space(conn)
         assert conn.execute("PRAGMA freelist_count").fetchone()[0] == 0
         assert conn.execute("PRAGMA page_count").fetchone()[0] < pages_before
+
+
+def _v3_database(path):
+    """A database as schema v3 left it (v2 base + the v3 migration), with one car."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with closing(sqlite3.connect(str(path), isolation_level=None)) as conn:
+        conn.execute("PRAGMA auto_vacuum = INCREMENTAL")
+        conn.execute("PRAGMA journal_mode = WAL")
+        for statement in db._split_sql(db.SCHEMA_V2) + db.MIGRATIONS[3]:
+            conn.execute(statement)
+        conn.execute("PRAGMA user_version = 3")
+        conn.execute("""INSERT INTO vehicles (house, external_id, first_seen_at, last_seen_at, comments)
+                        VALUES ('alcopa', '1', ?, ?, 'déjà là')""", (NOW, NOW))
+
+
+def test_migration_v3_to_v4_adds_the_three_columns_and_keeps_data(settings):
+    _v3_database(settings.db_path)
+    with db.open_db(settings.db_path) as conn:
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == db.SCHEMA_VERSION == 4
+        row = conn.execute("SELECT comments, damages_json FROM vehicles").fetchone()
+        assert row["comments"] == "déjà là" and row["damages_json"] is None  # NULL = not read yet
+        assert "detail_json" in {r[1] for r in conn.execute("PRAGMA table_info('assessments')")}
+        vid = conn.execute("SELECT id FROM vehicles").fetchone()[0]
+        insert = """INSERT INTO llm_assessments (vehicle_id, kind, llm_input_hash, prompt_version, llm_model,
+                        status, cost_usd, created_at) VALUES (?, 'verdict', 'h', 'p', 'm', 'ok', ?, ?)"""
+        conn.execute(insert, (vid, 0.0012, NOW))
+        conn.execute(insert, (vid, None, NOW))
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute(insert, (vid, -0.5, NOW))
+    with db.open_db(settings.db_path) as conn:  # idempotent
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == db.SCHEMA_VERSION
+
+
+def test_damages_json_is_replaced_when_read_and_kept_otherwise(settings):
+    with db.open_db(settings.db_path) as conn:
+        with db.write_tx(conn):
+            sale_id = db.upsert_sale(conn, _Sale(), NOW)
+            db.apply_snapshot(conn, "alcopa", sale_id, [_Stub("1")], NOW)
+        vid = conn.execute("SELECT id FROM vehicles").fetchone()[0]
+
+        def damages():
+            return conn.execute("SELECT damages_json FROM vehicles WHERE id = ?", (vid,)).fetchone()[0]
+
+        first = '[{"zone": "Capot", "kind": "Peinture"}]'
+        db.update_vehicle_detail(conn, vid, {"damages_json": first})
+        assert damages() == first
+        db.update_vehicle_detail(conn, vid, {"damages_json": None, "warranty": "Garantie"})
+        assert damages() == first  # a page without a readable list keeps the stored one
+        db.update_vehicle_detail(conn, vid, {"damages_json": "[]"})
+        assert damages() == "[]"  # read and empty
+
+
+def test_assessments_store_detail_json(settings):
+    """Display data saved at scoring time for the site: price parts adding up, CT document
+    state, damages (None = not read) and no battery for a car without one."""
+    import json
+    from tests.test_service_report import NOW as SEED_NOW, TODAY, seed
+    from auction_agent.scoring.service import rescore_all
+    with db.open_db(settings.db_path) as conn:
+        seed(conn)
+        rescore_all(conn, settings, today=TODAY, now=SEED_NOW, use_llm=False)
+        rows = conn.execute("SELECT effective_price, detail_json FROM assessments").fetchall()
+    assert rows
+    for row in rows:
+        detail = json.loads(row["detail_json"])
+        price = detail["price"]
+        assert price["total"] == row["effective_price"]
+        assert round(price["start"] + price["vat"] + price["fees"] + price["repairs"] + price["ct_redo"], 2) == price["total"]
+        assert price["fees"] == 0.0  # the seeded sale is online
+        assert detail["ct_doc"] == "parsed" and detail["damages"] is None and detail["battery"] is None

@@ -196,3 +196,41 @@ def test_ctrl_c_releases_lock(settings):
     with pytest.raises(KeyboardInterrupt):
         crawl(settings, http, clock)
     assert crawl(settings, make_http(), clock).status == "ok"
+
+
+# ------------------------------------------------------------------ 2026 page layout (synthetic, invented values)
+
+SALE_2026 = "/salle-de-vente-encheres/beauvais/10999"
+IDS_2026 = {
+    "1234567": "/voiture-occasion/toyota/auris-hybride-136h-dynamic-1234567",
+    "1234568": "/voiture-occasion/renault/clio-v-tce-90-zen-1234568",
+}
+
+
+def make_http_2026():
+    routes = {f"{SALE_2026}?page=1": read_fixture("alcopa", "sale_card_multiline.html"),
+              "/getDocument/ct/VGVzdFRva2VuQ1QwMDAx": PDF}
+    for pid, path in IDS_2026.items():
+        routes[path] = read_fixture("alcopa", "detail_layout_2026.html").replace("1234567", pid)
+    return FakeHttp(routes)
+
+
+def test_2026_layout_stores_comment_damages_and_warranty_label(settings):
+    report = crawl(settings, make_http_2026(), Clock(), sale=SALE_2026)
+    assert report.status == "ok" and report.counts["detailed"] == 2 and report.counts["failed"] == 0
+    with db.open_db(settings.db_path) as conn:
+        car = conn.execute("SELECT * FROM vehicles WHERE external_id = '1234567'").fetchone()
+        assert car["comments"] == "Révision faite en 2025. Deux clés, carnet présent."
+        assert json.loads(car["damages_json"]) == [
+            {"zone": "Pare-choc avant", "kind": "Peinture"},
+            {"zone": "Porte avant droite", "kind": "Débosselage"},
+            {"zone": "Jante avant gauche", "kind": "Peinture"},
+        ]
+        # The detail page's formula wins over the card's bare "Garantie" badge.
+        assert car["warranty"] == "Garantie Essentielle de 3 mois incluse" and car["photo_count"] == 2
+        listing = conn.execute("SELECT starting_price, current_price_attr FROM listings l JOIN vehicles v "
+                               "ON v.id = l.vehicle_id WHERE v.external_id = '1234568'").fetchone()
+        assert listing["starting_price"] is None and listing["current_price_attr"] == 6300.0
+        dump = "\n".join(str(v) for r in conn.execute("SELECT * FROM vehicles") for v in tuple(r))
+        for leaked in ("example.test", ".jpg", "bucket", "VF1TESTZZ00000003", "ZZ-999-ZZ", "note interne"):
+            assert leaked not in dump

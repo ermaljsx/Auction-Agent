@@ -81,6 +81,9 @@ class LotDetail:
     photo_count: int = 0
     raw_specs: dict[str, str] = field(default_factory=dict)
     sale_url: Optional[str] = None
+    # Body-damage list ("Défauts esthétiques"): [{"zone": "Capot", "kind": "Peinture"}, …] in
+    # page order, duplicates kept. None = no readable list on the page; [] = an empty list.
+    damages: Optional[list[dict[str, str]]] = None
 
 
 @dataclass
@@ -134,6 +137,11 @@ class AuctionAdapter(ABC):
     @abstractmethod
     def fee_model(self, price: float, sale_kind: str, buyer: str, vat_regime: str) -> float:
         """All-in price a buyer pays for a given hammer/opening price (estimate)."""
+
+    def fee_split(self, price: float, sale_kind: str, buyer: str, vat_regime: str) -> dict[str, float]:
+        """What ``fee_model`` adds on top of ``price``: ``{"vat", "fees"}`` (VAT the buyer cannot
+        recover, buyer's fees). The default knows no VAT; adapters that do override it."""
+        return {"vat": 0.0, "fees": round(self.fee_model(price, sale_kind, buyer, vat_regime) - price, 2)}
 
     def handles(self, url: str) -> bool:
         return any(p.search(url) for p in self.url_patterns)

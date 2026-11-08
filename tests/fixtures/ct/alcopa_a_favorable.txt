@@ -1,0 +1,47 @@
+ÒkQ;2zÓ
+PROCÈS-VERBAL Auto
+DE CONTRÔLE TECHNIQUE Sécurité
+Exemplaire conservé par le centre
+N° D'IMPRIMÉ C 99000102
+NATURE DU CONTRÔLE (3) DATE DU CONTRÔLE N° DU PROCÈS-VERBAL
+Contrôle technique périodique 05/10/2026 26990102
+(7) RÉSULTAT DU CONTRÔLE (6) DÉFAILLANCES ET NIVEAUX DE GRAVITÉ
+Favorable
+Défaillances mineures :
+(8) LIMITE DE VALIDITÉ DU CONTRÔLE RÉALISÉ 3.5.1.a.1. LAVE-GLACE DU PARE-BRISE : Mauvais fonctionnement
+5.2.3.e.1. PNEUMATIQUES : Usure anormale ou présence d’un corps étranger
+04/10/2028 ARD, ARG
+NATURE DU PROCHAIN CONTRÔLE 6.2.1.a.1. ÉTAT DE LA CABINE ET DE LA CARROSSERIE : Panneau ou élément
+Contrôle technique périodique endommagé AV
+IDENTIFICATION DU CENTRE DE CONTRÔLE
+N° D'AGRÉMENT : S099X001
+(9)RAISON SOCIALE : SARL BANC D'ESSAI FICTIF
+(3) COORDONNÉES : 12 RUE DES ESSAIS
+ZA DU PARC IMAGINAIRE
+99990 VILLE-TEST
+(9) IDENTITÉ DU CONTRÔLEUR
+N° D'AGRÉMENT : 099X1234
+SIGNATURE :
+IDENTIFICATION DU VÉHICULE
+Date de 1ère mise
+(2) Immatriculation et pays Date d'immatriculation en circulation
+[IMMAT] (F) 11/04/2022 11/04/2022
+Marque Désignation commerciale
+TOYOTA YARIS
+(1) N° dans la série du type (VIN) (5) Catégorie internationale Genre
+[VIN] M1 VP
+Type / CNIT Energie
+[VIN]
+Document(s) présenté(s)
+Certificat d'immatriculation
+(4)KILOMÉTRAGE RELEVÉ MESURES RÉALISÉES ET VALEURS LIMITES CORRESPONDANTES
+41250 AVANT ARRIERE
+G D G D
+Ripage (-8 à +8 m/km) : -0.4 m/km
+INFORMATION SUR LE CONTRÔLE TECHNIQUE DÉFAVORABLE
+PROCÈS-VERBAL N° : DATE : Forces verticales : 720 daN 540 daN
+N° D'AGRÉMENT DU CENTRE : Frein de service
+Taux d'efficacité global (≥58 %) : 66 %
+CT:04/10/2028
+N° D’AGRÉMENT : S099X001 26990102
+N° SÉRIE : [VIN] XXXXXXXXXX

@@ -30,5 +30,12 @@ def test_recon_step_tolerates_only_unresolved_sale_with_a_given_url(rc, sale_url
 
 def test_smoke_runs_only_by_hand_or_with_the_tag_and_logs_counts_only():
     assert "contains(github.event.head_commit.message, '[smoke]')" in SMOKE
-    assert "--quiet" in SMOKE and "--llm-limit 5" in SMOKE and "--pages 1 --limit 3" in SMOKE
+    assert "--quiet" in SMOKE and "--pages 1 --limit 3" in SMOKE
     assert "permissions:\n  contents: read" in SMOKE
+
+
+def test_smoke_holds_no_secrets_and_scores_rules_only():
+    # The repository is public and the AI review runs on the owner's PC only: no key ever goes to GitHub.
+    assert "secrets." not in SMOKE
+    assert "ANTHROPIC_API_KEY" not in SMOKE and "BLOB_READ_WRITE_TOKEN" not in SMOKE
+    assert "score --no-llm" in SMOKE and "--llm-limit" not in SMOKE

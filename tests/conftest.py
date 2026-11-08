@@ -13,8 +13,8 @@ from auction_agent.config import Settings
 FIXTURES = Path(__file__).parent / "fixtures"
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-# Settings the app (or the OpenAI SDK) reads from the environment: never inherited.
-_ENV_PREFIXES = ("AUCTION_AGENT_", "OPENAI_", "LLM_", "GEMINI_", "TIER_", "BLOB_", "VERCEL_")
+# Settings the app (or the Anthropic / OpenAI SDKs) read from the environment: never inherited.
+_ENV_PREFIXES = ("AUCTION_AGENT_", "ANTHROPIC_", "OPENAI_", "LLM_", "GEMINI_", "TIER_", "BLOB_", "VERCEL_")
 _ENV_VARS = ["IDENTITY_HMAC_KEY", "BUYER_PROFILE", "ENGINE_RISK_MAX_TIER", "RELIST_DETAIL_CHECK", "LATE_CT_BUDGET"]
 
 

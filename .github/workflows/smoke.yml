@@ -1,5 +1,7 @@
-# Phase 0 smoke test against the live site: robots.txt, this week's Beauvais sale, 3 lots, at most 5 AI reviews.
+# Phase 0 smoke test against the live site: robots.txt, this week's Beauvais sale, 3 lots, rules-only scoring.
 # About 10 polite requests. Logs are public (public repository): commands print counts only, never per-car lines.
+# No secrets: the AI review and the upload run on the owner's PC only (Alcopa refuses GitHub's servers),
+# so this public repository holds no API key or storage token.
 # Runs by hand ("Run workflow"), or on a push to the working branch whose commit message contains [smoke].
 # If the site blocks or challenges the runner, the crawler stops (it never tries to get around a block).
 name: Smoke test (live site)
@@ -31,7 +33,6 @@ jobs:
       AUCTION_AGENT_REPORTS_DIR: /tmp/auction-agent/reports
       AUCTION_AGENT_ENV_FILE: /tmp/auction-agent/none.env
       AUCTION_AGENT_USER_AGENT: "AuctionAgent/0.1 (personal research project; +https://github.com/ermaljsx/Auction-Agent)"
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       SALE_URL: ${{ github.event.inputs.sale_url }}
     steps:
       - uses: actions/checkout@v5
@@ -48,8 +49,8 @@ jobs:
         run: python -m auction_agent recon --room beauvais || { rc=$?; [ "$rc" -eq 3 ] && [ -n "$SALE_URL" ]; }
       - name: Crawl 3 lots (first listing page only)
         run: python -m auction_agent crawl --url "${SALE_URL:-/salle-de-vente-encheres/beauvais}" --pages 1 --limit 3 --quiet
-      - name: Score (at most 5 AI reviews)
-        run: python -m auction_agent score --llm-limit 5
+      - name: Score (rules only)
+        run: python -m auction_agent score --no-llm
       - name: Summary
         if: always()
         run: python -m auction_agent stats

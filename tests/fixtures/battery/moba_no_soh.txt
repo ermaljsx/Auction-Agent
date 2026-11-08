@@ -1,0 +1,19 @@
+Certificat batterie
+Date du diagnostic : 21/09/2026 à 14:05 UTC
+Édition à jour disponible sur
+https://certificate.example.test/certificate BMW Série 3 330e
+s/c0000000003.pdf
+VIN : [VIN] Immat : [IMMAT]
+Date de mise en circulation : 09/09/2021
+Kilométrage : 55 800 km
+État de la batterie
+Comparaison du SOH avec des véhicules similaires en
+âge et kilométrage
+50% 50%
+État de Santé (SOH) (1)
+que ce véhicule
+Capacité utile restante / Capacité utile neuve (2) 9,24 kWh / 10,5 kWh
+(1) Texte d'exemple : SOH calculé comme le rapport de la capacité actuelle et de la capacité à l'état neuf.
+Garantie constructeur
+SOH supérieur à 70%, pendant 6 ans ou 100 000 km.
+Texte d'exemple : autonomies calculées avec le modèle de consommation Moba.

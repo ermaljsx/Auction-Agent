@@ -23,6 +23,19 @@ MONTHS_FR = {
     "juillet": 7, "aout": 8, "août": 8, "septembre": 9, "octobre": 10, "novembre": 11,
     "decembre": 12, "décembre": 12,
 }
+# Short forms, as the Alcopa room page prints its sale cards ('lun. 9 nov.', seen on
+# 2026-11-07): the usual French abbreviations, with and without accents. 'mars', 'mai',
+# 'juin' and 'août' have none; 'mar' is left out on purpose, since it also abbreviates mardi.
+MONTHS_FR_SHORT = {
+    "janv": 1, "jan": 1, "févr": 2, "fevr": 2, "fév": 2, "fev": 2, "avr": 4, "juil": 7,
+    "sept": 9, "sep": 9, "oct": 10, "nov": 11, "déc": 12, "dec": 12,
+}
+
+
+def month_fr(token: Optional[str]) -> int:
+    """'novembre', 'nov' or 'Nov.' → 11; anything else → 0."""
+    key = (token or "").strip().rstrip(".").lower()
+    return MONTHS_FR.get(key) or MONTHS_FR_SHORT.get(key, 0)
 
 
 def _digits(token: str) -> int:
@@ -87,18 +100,18 @@ def first_int(text: Optional[str]) -> Optional[int]:
 
 
 def parse_fr_date(text: Optional[str]) -> Optional[date]:
-    """'19 octobre 2026' or '19/10/2026' → date."""
+    """'19 octobre 2026', '9 nov. 2026' or '19/10/2026' → date."""
     if not text:
         return None
     m = re.search(r"(\d{1,2})/(\d{1,2})/(\d{4})", text)
     if m:
         d, mth, y = (int(x) for x in m.groups())
     else:
-        m = re.search(r"(\d{1,2})(?:er)?\s+([a-zéûè]+)\s+(\d{4})", text, re.IGNORECASE)
+        m = re.search(r"(\d{1,2})(?:er)?\s+([a-zéûè]+)\.?\s+(\d{4})", text, re.IGNORECASE)
         if not m:
             return None
         d, y = int(m.group(1)), int(m.group(3))
-        mth = MONTHS_FR.get(m.group(2).lower(), 0)
+        mth = month_fr(m.group(2))
     try:
         return date(y, mth, d)
     except ValueError:

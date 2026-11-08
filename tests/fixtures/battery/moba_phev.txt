@@ -1,0 +1,33 @@
+Certificat batterie
+Date du diagnostic : 14/09/2026 à 10:15 UTC
+Édition à jour disponible sur
+https://certificate.example.test/certificate Peugeot 308 PHEV
+s/c0000000000.pdf
+VIN : [VIN] Immat : [IMMAT]
+Date de mise en circulation : 03/03/2022
+Kilométrage : 64 210 km
+État de la batterie
+Comparaison du SOH avec des véhicules similaires en
+âge et kilométrage
+96,25%
+61% 39%
+39% des véhicules similaires ont un SOH plus élevé
+État de Santé (SOH) (1)
+que ce véhicule
+Capacité utile restante / Capacité utile neuve (2) 10,88 kWh / 11,3 kWh
+(1) Texte d'exemple : SOH lu dans les données du véhicule lors du diagnostic.
+(2) Texte d'exemple : la capacité utile est la capacité réellement disponible.
+Garantie constructeur
+Texte d'exemple. À titre indicatif, la garantie moyenne constatée pour ce véhicule est la suivante :
+SOH supérieur à 70%, pendant 8 ans ou 160 000 km.
+Autonomies (3) Été (25°C) Hiver (0°C)
+Usage mixte 52 - 58 km 40 - 44 km
+(3) En mode 100% électrique. Texte d'exemple : autonomies calculées avec le modèle de consommation Moba.
+www.example.test
+Exemple SAS, SIRET 00000000000000
+
+Certificat batterie - données complémentaires
+Batterie haute tension
+Tension du pack 300,5 V
+Écart maximum de tension des cellules 12 mV
+Lieu du diagnostic Ville-Exemple

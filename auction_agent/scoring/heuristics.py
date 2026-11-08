@@ -11,6 +11,7 @@ thresholds can never go stale. See docs/MASTER_PLAN.md §4.
 from __future__ import annotations
 
 import json
+import math
 import re
 from dataclasses import dataclass, field
 from datetime import date, timedelta
@@ -22,7 +23,7 @@ from typing import Any, Callable, Optional
 from ..config import Settings
 from ..ct_parser import CRITICAL_SYSTEMS, RESULT_CRITICAL, RESULT_FAVORABLE, RESULT_MAJOR, fold
 
-HEURISTIC_VERSION = "h1-2026.10"
+HEURISTIC_VERSION = "h1-2026.11"
 WEIGHTS = {"R": 0.35, "C": 0.35, "V": 0.30}
 TIER_ORDER = {"red": 0, "yellow": 1, "green": 2}
 
@@ -31,6 +32,22 @@ REPAIR_COST_MAJOR = {
     "visibilite": 120, "nuisances": 300, "equipements": 150, "identification": 50,
 }
 CT_REDO_COST = 80.0
+
+# French names of the CT functions (ct_parser.SYSTEMS slugs), for gates and the site.
+SYSTEM_FR = {
+    "identification": "Identification",
+    "freinage": "Freinage",
+    "direction": "Direction",
+    "visibilite": "Visibilité",
+    "eclairage": "Feux et équipements électriques",
+    "liaisons_sol": "Essieux, roues, pneus, suspension",
+    "structure": "Châssis et carrosserie",
+    "equipements": "Autres équipements",
+    "nuisances": "Nuisances (pollution, bruit)",
+    "supplementaires": "Contrôles supplémentaires",
+    "vehicule_ecole": "Véhicule école",
+    "autre": "Autre",
+}
 
 _HS = r"(?:HS|H\.S\.?|HORS SERVICE)"
 _RED_SEVERE = re.compile(
@@ -51,17 +68,34 @@ _MINOR_TEXT = {
 }
 _NEGATORS = {"NON", "PAS", "SANS", "AUCUN", "AUCUNE", "NI", "JAMAIS"}
 _PREFIX_TOKENS = {"CLASSE", "SERIE", "GRAND", "RANGE", "NEW", "MODEL", "NOUVELLE", "NOUVEAU", "ID.", "E"}
+# A negation only reaches words of its own clause: "Km non garanti, moteur HS" is a broken
+# engine, and "Pas de voyant, bruit train avant" still reports a noise.
+_CLAUSE_SPLIT = re.compile(r"[.,;:!?/()\[\]\n]|\s-\s|\bMAIS\b")
+_IMMEDIATE_NEG = re.compile(r"\b(?:PAS|SANS|AUCUNE?|NI|JAMAIS|NON)\b(?:\s+(?:DE|DU|DES|D'))?\s*$")
+
+
+def _clause_before(text: str, start: int) -> str:
+    """The part of the clause that precedes ``start`` (at most 30 characters back)."""
+    return _CLAUSE_SPLIT.split(text[max(0, start - 30):start])[-1]
 
 
 def _negated(text: str, start: int) -> bool:
-    """True when one of the 3 words before ``start`` is a negation ('pas de fumée')."""
-    window = text[max(0, start - 30):start]
-    return any(tok in _NEGATORS for tok in re.findall(r"[A-Z]+", window)[-3:])
+    """True when one of the 3 words before ``start``, in the same clause, is a negation
+    ('pas de fumée', 'aucun voyant allumé')."""
+    return any(tok in _NEGATORS for tok in re.findall(r"[A-Z]+", _clause_before(text, start))[-3:])
 
 
-def _first_affirmed(rx: re.Pattern[str], text: str) -> Optional[re.Match[str]]:
+def _negated_strict(text: str, start: int) -> bool:
+    """For red deal-breakers: only a negation right before the words counts ('non VGE',
+    'pas de moteur HS'). Missing a broken engine costs more than a false red, which a person
+    reviews anyway."""
+    return bool(_IMMEDIATE_NEG.search(_clause_before(text, start)))
+
+
+def _first_affirmed(rx: re.Pattern[str], text: str,
+                    negated: Callable[[str, int], bool] = _negated) -> Optional[re.Match[str]]:
     for m in rx.finditer(text):
-        if not _negated(text, m.start()):
+        if not negated(text, m.start()):
             return m
     return None
 
@@ -75,6 +109,16 @@ def add_months(day: date, months: int) -> date:
 
 
 _LEASED_RE = re.compile(r"BATTERIE\s+(?:EN\s+)?LOCATION|LOCATION\s+DE\s+(?:LA\s+)?BATTERIE")
+
+# Body damage ("Défauts esthétiques"): a small, capped condition penalty, never a gate (the
+# list is cosmetic; structure is gated through the CT). Calibrated on two real pages only.
+DAMAGE_FREE_POINTS = 3  # a few touch-ups are normal at auction
+DAMAGE_MAX_PENALTY = 6  # condition points: at most 2.1 points of the final score
+_WHEEL_ZONE = re.compile(r"\b(?:JANTES?|ENJOLIVEURS?|PNEUS?|ROUES?)\b")
+_HEAVY_KIND = re.compile(r"DEBOSSEL|BOSSE|ENFONC|REMPLAC|CHANG|CASS|FISSUR|DECHIR|PERFOR|ROUILL|CORRO|GRELE")
+
+BATTERY_SOH_AGREE = 2.0  # points: listing and certificate agree (the listing shows floor(cert))
+BATTERY_CERT_MIN_CONFIDENCE = 0.8
 
 
 @dataclass
@@ -100,6 +144,11 @@ class Facts:
     sale_date: Optional[date]
     ct: Optional[dict[str, Any]]  # parsed CT, or None
     ct_doc: Optional[str]  # None | 'parsed' | 'unreadable' | 'missing'
+    # Added in h1-2026.11, with defaults so existing callers keep working.
+    damages: Optional[list[dict[str, str]]] = None  # [{"zone", "kind"}]; None = not read, [] = none
+    battery_cert: Optional[dict[str, Any]] = None  # whitelisted certificate reading (confidence >= 0.8)
+    battery_soh_source: Optional[str] = None  # "listing" | "certificate" | "lowest" | None
+    price_basis: Optional[str] = None  # which listing value ``price`` is: "start" (mise à prix) | "bid"
 
 
 @dataclass
@@ -123,6 +172,9 @@ class Partial:
     effective_price: Optional[float] = None
     issues: list[str] = field(default_factory=list)  # reasons for 'partial' confidence
     engine_flags: list[str] = field(default_factory=list)
+    # The effective price's parts, for the site's price table: {"start", "vat", "fees",
+    # "repairs", "ct_redo", "total"}, rounded to the cent; they add up to ``total``.
+    price_parts: Optional[dict[str, float]] = None
 
     @property
     def cohort_eligible(self) -> bool:
@@ -138,6 +190,90 @@ class Partial:
 def load_engine_kb() -> dict[str, Any]:
     path = Path(__file__).with_name("engines.json")
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def pick_battery_soh(listing: Optional[float], cert: Optional[dict[str, Any]]) -> tuple[Optional[float], Optional[str]]:
+    """(SoH, source) from the listing value and a battery-certificate reading.
+
+    The listing wins when both agree within 2 points (it shows the certificate value
+    rounded down); the certificate is used when the listing has none; when they disagree
+    by more, the lower (more cautious) value is kept with source "lowest". A certificate
+    read with a confidence below 0.8 is ignored.
+    """
+    c = None
+    if cert and (cert.get("parse_confidence") or 0) >= BATTERY_CERT_MIN_CONFIDENCE:
+        value = cert.get("soh_pct")
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            c = float(value)
+    if listing is None:
+        return (c, "certificate") if c is not None else (None, None)
+    if c is None or abs(listing - c) <= BATTERY_SOH_AGREE:
+        return listing, "listing"
+    return min(listing, c), "lowest"
+
+
+def _warranty_text(label: str) -> str:
+    """Reason text for a warranty. The bare card badge ("Garantie", a link to Alcopa's
+    mechanical-warranty page) does not say which formula: "Garantie : Garantie" read oddly."""
+    label = re.sub(r"\s+", " ", label).strip()
+    folded = fold(label).strip()
+    if folded == "GARANTIE":
+        return "Garantie mécanique incluse (formule non précisée)"
+    if folded.startswith("GARANTIE"):
+        return label  # e.g. "Garantie Sérénité de 3 mois incluse"
+    return f"Garantie : {label}"
+
+
+def _damage_pairs(damages: Optional[list[Any]]) -> list[tuple[str, str]]:
+    return [(d["zone"], d["kind"]) for d in damages or []
+            if isinstance(d, dict) and isinstance(d.get("zone"), str) and isinstance(d.get("kind"), str)]
+
+
+def damage_summary(damages: Optional[list[Any]]) -> list[dict[str, Any]]:
+    """[{"zone", "kind", "n"}] in first-seen order, wheels included (for display and the AI)."""
+    counts: dict[tuple[str, str], int] = {}
+    for pair in _damage_pairs(damages):
+        counts[pair] = counts.get(pair, 0) + 1
+    return [{"zone": z, "kind": k, "n": n} for (z, k), n in counts.items()]
+
+
+def _damage_penalty(damages: Optional[list[Any]]) -> tuple[int, Optional[str]]:
+    """(condition points to remove, reason text) for the body-damage list.
+
+    Points = distinct (zone, kind) pairs outside the wheels, dents and replacements counting
+    double; the first ``DAMAGE_FREE_POINTS`` are free and the penalty is capped.
+    """
+    seen: set[tuple[str, str]] = set()
+    zones: dict[str, str] = {}  # folded zone -> first label seen
+    heavy_zones: set[str] = set()
+    points = 0
+    for zone, kind in _damage_pairs(damages):
+        fz, fk = fold(zone).strip(), fold(kind).strip()
+        if _WHEEL_ZONE.search(fz) or (fz, fk) in seen:
+            continue
+        seen.add((fz, fk))
+        zones.setdefault(fz, zone)
+        heavy = bool(_HEAVY_KIND.search(fk))
+        points += 2 if heavy else 1
+        if heavy:
+            heavy_zones.add(fz)
+    penalty = min(DAMAGE_MAX_PENALTY, max(0, points - DAMAGE_FREE_POINTS))
+    if not penalty:
+        return 0, None
+    ordered = [z for z in zones if z in heavy_zones] + [z for z in zones if z not in heavy_zones]
+    shown = ", ".join(zones[z].lower() for z in ordered[:3]) + ("…" if len(ordered) > 3 else "")
+    n = len(zones)
+    text = f"Défauts esthétiques sur {n} élément{'s' if n > 1 else ''} de carrosserie"
+    if heavy_zones:
+        text += f", dont {len(heavy_zones)} avec débosselage ou remplacement"
+    return penalty, f"{text} ({shown})"
+
+
+def _defect_count(n: int, kind: str) -> str:
+    """French count of CT defects with real plurals: "sans défaillance", "1 défaillance mineure"."""
+    if not n:
+        return "sans défaillance"
+    return f"{n} défaillance {kind}" if n == 1 else f"{n} défaillances {kind}s"
 
 
 def _reason(pillar: str, code: str, delta: float, text: str, src: str, ref: str = "") -> dict[str, Any]:
@@ -202,12 +338,18 @@ def _tighten_from_ct(p: Partial, ct: dict[str, Any]) -> None:
                                 critical["code"] if critical else "result"))
     safety = [d for d in defects if d["severity"] == "major" and d["system"] in CRITICAL_SYSTEMS]
     if safety and not any(g.code == "ct_major_safety" for g in p.gates):
+        system = SYSTEM_FR.get(safety[0]["system"], safety[0]["system"]).lower()
         p.gates.append(Gate("ct_major_safety", "yellow", False,
-                            f"Défaillance majeure sur {safety[0]['system']} ({safety[0]['code']})", "ct", safety[0]["code"]))
+                            f"Défaillance majeure : {system} ({safety[0]['code']})", "ct", safety[0]["code"]))
 
 
-def assess(facts: Facts, settings: Settings, today: date, fee_model: Callable[..., float]) -> Partial:
-    """Price-independent pillars, gates and the effective price."""
+def assess(facts: Facts, settings: Settings, today: date, fee_model: Callable[..., float],
+           fee_split: Optional[Callable[..., dict[str, float]]] = None) -> Partial:
+    """Price-independent pillars, gates and the effective price.
+
+    ``fee_split`` (the adapter's) only tells which part of ``fee_model``'s extra is VAT for
+    the price table; without it the whole extra counts as fees. It never changes the price.
+    """
     ref_date = (facts.sale_date or today) + timedelta(days=21)
     reg = registration_date(facts)
     age = (ref_date - reg).days / 365.25 if reg else None
@@ -239,7 +381,7 @@ def assess(facts: Facts, settings: Settings, today: date, fee_model: Callable[..
             if per_year > expected * 1.33:
                 pen = min(15.0, (per_year - expected * 1.33) / 1000)
                 p.R -= pen
-                p.reasons.append(_reason("R", "km_per_year", -pen * w_r, f"{per_year:,.0f} km/an, au-dessus de la normale".replace(",", " "), "listing", "mileage_km"))
+                p.reasons.append(_reason("R", "km_per_year", -pen * w_r, f"{per_year:,.0f}".replace(",", " ") + " km/an, au-dessus de la normale", "listing", "mileage_km"))
             elif facts.fuel == "diesel" and per_year < 7_000 and age > 3:
                 p.R -= 4
                 p.reasons.append(_reason("R", "diesel_short_trips", -4 * w_r, "Diesel peu roulé (risque FAP/EGR)", "listing", "mileage_km"))
@@ -290,17 +432,17 @@ def assess(facts: Facts, settings: Settings, today: date, fee_model: Callable[..
             pen = min(14, 2 * counts.get("minor", 0))
             p.C = 92 - pen
             p.reasons.append(_reason("C", "ct_favorable", (p.C - 70) * w_c,
-                                     f"CT favorable ({counts.get('minor', 0)} défaillance(s) mineure(s))", "ct", "result"))
+                                     "CT favorable, " + _defect_count(counts.get("minor", 0), "mineure"), "ct", "result"))
         elif ct["result"] == RESULT_MAJOR:
             pen = sum(6 * (1.5 if d["system"] in CRITICAL_SYSTEMS else 1) for d in defects if d["severity"] == "major")
             pen += counts.get("minor", 0)
             p.C = max(15.0, 60 - pen)
             p.reasons.append(_reason("C", "ct_major", (p.C - 70) * w_c,
-                                     f"CT défavorable : {counts.get('major', 0)} défaillance(s) majeure(s)", "ct", "result"))
+                                     "CT défavorable : " + _defect_count(counts.get("major", 0), "majeure"), "ct", "result"))
         elif ct["result"] == RESULT_CRITICAL:
             p.C = 10
             p.reasons.append(_reason("C", "ct_critique", (10 - 70) * w_c,
-                                     f"CT défavorable : {counts.get('critical', 0)} défaillance(s) critique(s)", "ct", "result"))
+                                     "CT défavorable : " + _defect_count(counts.get("critical", 0), "critique"), "ct", "result"))
         _tighten_from_ct(p, ct)
         if ct.get("odometer_inconsistent"):
             p.gates.append(Gate("odometer", "yellow", False, "Historique kilométrique incohérent", "ct", "odometer"))
@@ -323,25 +465,43 @@ def assess(facts: Facts, settings: Settings, today: date, fee_model: Callable[..
         leased = True
     if leased:
         p.flags.append("battery_leased")
-    if facts.fuel in ("electric", "plugin_hybrid") and facts.battery_soh_pct is not None:
-        soh = facts.battery_soh_pct
+    soh, soh_source = facts.battery_soh_pct, facts.battery_soh_source
+    if soh_source is None and facts.battery_cert:  # Facts built without service.load_facts
+        soh, soh_source = pick_battery_soh(facts.battery_soh_pct, facts.battery_cert)
+    if facts.fuel in ("electric", "plugin_hybrid") and soh is not None:
+        # Shown rounded down (74.6 reads "74 %", like the listing); the thresholds are
+        # integers, so the gate and the penalty are the same as with the listing value.
+        src = "battery" if soh_source in ("certificate", "lowest") else "listing"
+        shown = math.floor(soh)
         if soh < 75 and not leased:
-            p.gates.append(Gate("battery_soh", "red", False, f"Batterie dégradée (SoH {soh:.0f} %)", "listing", "battery_soh_pct"))
+            p.gates.append(Gate("battery_soh", "red", False, f"Batterie dégradée (SoH {shown} %)", src, "battery_soh_pct"))
         pen = 0 if soh >= 90 else 8 if soh >= 80 else 15
         if pen:
             p.C -= pen
-            p.reasons.append(_reason("C", "battery_soh", -pen * w_c, f"État de santé batterie {soh:.0f} %", "listing", "battery_soh_pct"))
+            p.reasons.append(_reason("C", "battery_soh", -pen * w_c, f"État de santé batterie {shown} %", src, "battery_soh_pct"))
+        if soh_source == "lowest":
+            p.flags.append("battery_soh_mismatch")
+            p.reasons.append(_reason("C", "battery_soh_mismatch", 0.0,
+                                     f"SoH annoncé et SoH du certificat batterie différents : {shown} % retenu "
+                                     "(valeur la plus basse)", "battery", "battery_cert"))
 
     if facts.warranty:
         p.C += 5
-        p.reasons.append(_reason("C", "warranty", 5 * w_c, f"Garantie : {facts.warranty}", "listing", "warranty"))
+        p.reasons.append(_reason("C", "warranty", 5 * w_c, _warranty_text(facts.warranty), "listing", "warranty"))
+
+    damage_pen, damage_text = _damage_penalty(facts.damages)
+    if damage_pen:
+        p.C -= damage_pen
+        p.flags.append("body_damage")
+        p.reasons.append(_reason("C", "body_damage", -damage_pen * w_c, damage_text, "listing", "damages"))
 
     if folded_comments:
-        severe = _first_affirmed(_RED_SEVERE, folded_comments)
+        severe = _first_affirmed(_RED_SEVERE, folded_comments, _negated_strict)
         if severe:
             p.gates.append(Gate("comment_dealbreaker", "red", True,
                                 f"Mention « {severe.group(1).lower()} » dans les commentaires", "comment", severe.group(1)))
-        if _first_affirmed(_YELLOW_TEXT, folded_comments):
+        # Strict too: "Vendu sans garantie kilométrage non garanti" is a mileage warning.
+        if _first_affirmed(_YELLOW_TEXT, folded_comments, _negated_strict):
             p.gates.append(Gate("mileage_not_guaranteed", "yellow", False, "Kilométrage non garanti", "comment", "kilometrage"))
             p.issues.append("mileage_not_guaranteed")
         minor_total = 0
@@ -368,7 +528,16 @@ def assess(facts: Facts, settings: Settings, today: date, fee_model: Callable[..
                     repair += cost * (2 if d["severity"] == "critical" else 1)
         if repair:
             p.flags.append("repair_estimate")
-        p.effective_price = round(eff + repair + (CT_REDO_COST if ct_redo else 0.0), 2)
+        redo = CT_REDO_COST if ct_redo else 0.0
+        p.effective_price = round(eff + repair + redo, 2)
+        vat = 0.0
+        if fee_split is not None:
+            vat = round(float(fee_split(facts.price, facts.sale_kind, settings.buyer_profile,
+                                        facts.vat_regime).get("vat") or 0.0), 2)
+        start = round(facts.price, 2)
+        # The fees are what is left of the fee model's price, so the parts always add up.
+        p.price_parts = {"start": start, "vat": vat, "fees": round(eff - start - vat, 2),
+                         "repairs": round(repair, 2), "ct_redo": redo, "total": p.effective_price}
     else:
         p.issues.append("price_unknown")
         p.flags.append("price_unknown")
@@ -464,6 +633,7 @@ def finalize(
         "max_tier": max_tier,
         "confidence": confidence,
         "effective_price": part.effective_price,
+        "price_parts": dict(part.price_parts) if part.price_parts else None,
         "value_basis": basis,
         "gates": [g.__dict__ for g in part.gates],
         "flags": sorted(set(part.flags + issues)),

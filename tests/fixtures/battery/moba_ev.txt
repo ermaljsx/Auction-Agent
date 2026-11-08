@@ -1,0 +1,32 @@
+Certificat batterie
+Date du diagnostic : 02/10/2026 à 08:40 Europe/Paris
+Édition à jour disponible sur
+https://certificate.example.test/certificate Renault Zoe R110
+s/c0000000001.pdf
+VIN : [VIN] Immat : [IMMAT]
+Date de mise en circulation : 15/06/2020
+Kilométrage : 61 000 km
+État de la batterie
+Comparaison du SOH avec des véhicules similaires en
+âge et kilométrage
+88,5%
+35% 65%
+65% des véhicules similaires ont un SOH plus élevé
+État de Santé (SOH) (1)
+que ce véhicule
+Capacité utile restante / Capacité utile neuve (2) 40,98 kWh / 46,3 kWh
+(1) Texte d'exemple : SOH lu dans les données du véhicule lors du diagnostic.
+(2) Texte d'exemple : la capacité utile est la capacité réellement disponible.
+Garantie constructeur
+Texte d'exemple. À titre indicatif, la garantie moyenne constatée pour ce véhicule est la suivante :
+SOH supérieur à 70%, pendant 8 ans ou 160 000 km.
+Autonomies (3) Été (25°C) Hiver (0°C)
+Usage mixte 280 - 310 km 220 - 245 km
+(3) Texte d'exemple : autonomies calculées avec le modèle de consommation Moba.
+www.example.test
+Exemple SAS, SIRET 00000000000000
+
+Certificat batterie - données complémentaires
+Batterie haute tension
+Tension du pack 390,2 V
+Écart maximum de tension des cellules 21 mV

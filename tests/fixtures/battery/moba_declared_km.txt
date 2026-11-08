@@ -1,0 +1,23 @@
+Certificat batterie
+Date du diagnostic : 18/08/2026 à 11:20 UTC
+Édition à jour disponible sur
+https://certificate.example.test/certificates Peugeot 508 Plug-in Hybrid (1)
+/c0000000002.pdf
+VIN : [VIN] Immat : [IMMAT]
+Date de mise en circulation : 12/05/2021
+Kilométrage : 98 300 km
+(1) Selon déclaration de la personne ayant réalisé le diagnostic
+État de la batterie
+Comparaison du SOH avec des véhicules similaires en
+âge et kilométrage
+94,75%
+66% 34%
+État de Santé (SOH) (2)
+Capacité utile restante / Capacité utile neuve (3) 10,99 kWh / 11,6 kWh
+(2) Texte d'exemple : SOH lu dans les données du véhicule lors du diagnostic.
+(3) Texte d'exemple : la capacité utile est la capacité réellement disponible.
+Garantie constructeur
+Texte d'exemple. À titre indicatif, la garantie moyenne constatée pour ce véhicule est la suivante :
+SOH supérieur à 70%, pendant 6 ans ou 100 000 km.
+(4) Texte d'exemple : autonomies calculées avec le modèle de consommation Moba.
+www.example.test
