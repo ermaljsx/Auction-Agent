@@ -1,0 +1,54 @@
+ÒaB:2cÓ
+PROCÈS-VERBAL Auto
+DE CONTRÔLE TECHNIQUE Sécurité
+Exemplaire conservé par le centre
+N° D'IMPRIMÉ C 99000201
+NATURE DU CONTRÔLE (3) DATE DU CONTRÔLE N° DU PROCÈS-VERBAL
+Contrôle technique périodique 21/10/2026 26990201
+(7) RÉSULTAT DU CONTRÔLE (6) DÉFAILLANCES ET NIVEAUX DE GRAVITÉ
+Défavorable pour défaillances majeures
+Défaillances majeures :
+(8) LIMITE DE VALIDITÉ DU CONTRÔLE RÉALISÉ 1.1.13.a.2. GARNITURES OU PLAQUETTES DE FREIN : Usure excessive AVG, AVD
+20/12/2026 4.4.1.a.2. ÉTAT ET FONCTIONNEMENT (INDICATEURS DE DIRECTION ET FEUX DE SIGNAL
+NATURE DU PROCHAIN CONTRÔLE DE DÉTRESSE) : Source lumineuse défectueuse ou manquante : visibilité fortement réduite ARD
+Contre-visite
+4.4.3.a.2. CONFORMITÉ AVEC LES EXIGENCES (INDICATEURS DE DIRECTION ET FEUX DE
+IDENTIFICATION DU CENTRE DE CONTRÔLE
+N° D'AGRÉMENT : S099X002
+(9)RAISON SOCIALE : SARL BANC D'ESSAI FICTIF SIGNAL DE DÉTRESSE) : Feu, couleur émise, position, intensité ou marquage non conforme aux
+exigences AVD
+4.8.1.b.2. ÉTAT (CATADIOPTRES, MARQUAGE DE VISIBILITÉ RÉFLÉCHISSANT ET PLAQUES
+(3) COORDONNÉES : 12 RUE DES ESSAIS
+ZA DU PARC IMAGINAIRE RÉFLÉCHISSANTES ARRIÈRE) : Catadioptre défectueux ou endommagé ARD
+6.1.4.a.2. PARE-CHOCS, PROTECTION LATÉRALE ET DISPOSITIFS ANTI-ENCASTREMENT
+99990 VILLE-TEST ARRIÈRE : Mauvaise fixation ou endommagement susceptible de causer des blessures en cas de
+contact AV
+(9) IDENTITÉ DU CONTRÔLEUR 8.2.22.c.2. OPACITÉ : Le relevé du système OBD indique un dysfonctionnement important
+N° D'AGRÉMENT : 099X1235
+SIGNATURE : Code(s) défaut(s) standard(s) relevé(s) concernant le dispositif antipollution : P0401 P0402 P0403
+IDENTIFICATION DU VÉHICULE
+P0404 P0405
+Date de 1ère mise Défaillances mineures :
+(2) Immatriculation et pays Date d'immatriculation en circulation 5.2.3.e.1. PNEUMATIQUES : Usure anormale ou présence d’un corps étranger
+AB-123-CD (F) 02/03/2021 15/06/2018
+Marque Désignation commerciale
+RENAULT MEGANE ARD, ARG
+(1) N° dans la série du type (VIN) (5) Catégorie internationale Genre
+VF1TESTAB00000003 M1 VP Kilométrages relevés lors des précédents contrôles techniques depuis le 20 mai
+2018 : 10/06/2022 : 61200 km / 12/09/2024 : 88450 km
+Type / CNIT Energie
+M10TESTVP000A02 GO
+Document(s) présenté(s)
+Certificat d'immatriculation
+(4)KILOMÉTRAGE RELEVÉ MESURES RÉALISÉES ET VALEURS LIMITES CORRESPONDANTES
+112480 AVANT ARRIERE
+G D G D
+Ripage (-8 à +8 m/km) : +1.2 m/km
+INFORMATION SUR LE CONTRÔLE TECHNIQUE DÉFAVORABLE
+PROCÈS-VERBAL N° : DATE : Forces verticales : 880 daN 610 daN
+N° D'AGRÉMENT DU CENTRE : Frein de service
+CT:20/12/2026
+S099X002
+N° D’AGRÉMENT : S099X002 26990201
+N° SÉRIE : VF1TESTAB00000003 XXXXXXXXXX
+N° D'IMPRIMÉ : C99000201

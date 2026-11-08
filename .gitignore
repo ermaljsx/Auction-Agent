@@ -26,6 +26,9 @@ wheels/
 
 # Virtual environments
 .env
+# Local settings files (.env.txt is what Windows Notepad often saves); keep the template
+.env.*
+!.env.example
 .venv
 env/
 venv/
@@ -33,13 +36,15 @@ ENV/
 env.bak/
 venv.bak/
 
-# Local databases & scraped assets
-data/*.db
-data/*.sqlite
-data/*.sqlite3
+# Local data: databases (+ WAL/SHM), identity key, quarantine, legacy PDFs
+data/*
+!data/.gitkeep
+!data/documents/
 data/documents/*
 !data/documents/.gitkeep
-!data/.gitkeep
+
+# Real captured fixtures may contain personal data until reviewed
+tests/fixtures/alcopa/real/
 
 # Generated reports
 reports/*.html
@@ -51,3 +56,21 @@ reports/*.html
 .DS_Store
 Thumbs.db
 *.log
+
+# Real CT texts used by tests/test_ct_real_conformance.py: they name CT centres and controllers
+tests/fixtures/ct/real/
+
+# Real battery-certificate texts used by tests/test_battery_real_conformance.py (git-ignored like the CT texts)
+tests/fixtures/battery/real/
+
+# Never publish secrets, databases or local tool state (the repository is public)
+*.env
+*.bak
+*.db
+*.sqlite
+*.sqlite3
+*.pem
+*.key
+.vercel/
+.claude/settings.local.json
+.pytest_cache/

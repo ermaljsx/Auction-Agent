@@ -1,0 +1,13 @@
+PROCÈS-VERBAL DE CONTRÔLE TECHNIQUE
+Nature du contrôle : Contrôle technique périodique
+Date du contrôle : 02/09/2026
+Kilométrage relevé : 151 220 km
+Résultat : Défavorable pour défaillances majeures
+DEFAILLANCES CRITIQUES : néant
+DEFAILLANCES MAJEURES :
+1.1.13.a.2 Plaquettes de frein : usure excessive AV
+5.3.1.b.2 Amortisseur : fuite importante
+  côté gauche
+DEFAILLANCES MINEURES :
+8.2.2.a.1 Émissions : léger dépassement
+Contre-visite à effectuer avant le 02/11/2026

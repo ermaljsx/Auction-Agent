@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#121316" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0B0C0D" media="(prefers-color-scheme: dark)">
+<meta name="description" content="Comment Auction France lit les lots, calcule la note, la grille du contrôle technique et le coût estimé, et ce que fait l’avis IA.">
+<title>Méthode – Auction France</title>
+<link rel="alternate" hreflang="fr" href="/">
+<link rel="alternate" hreflang="en" href="/en/">
+<link rel="preload" href="/fonts/archivo-latin-wdth-wght.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<a class="skip" href="#main">Aller au contenu</a>
+<header class="band">
+  <div class="wrap mast">
+    <a class="brand" href="/" aria-label="Auction France, accueil"><svg class="mark" viewBox="0 0 28 28" width="28" height="28" aria-hidden="true" focusable="false"><rect class="mark-bg" width="28" height="28" rx="5"/><g class="mark-cells"><rect x="6" y="6" width="4.5" height="4.5" rx=".6"/><rect x="11.75" y="6" width="4.5" height="4.5" rx=".6"/><rect x="17.5" y="6" width="4.5" height="4.5" rx=".6"/><rect x="6" y="11.75" width="4.5" height="4.5" rx=".6"/><rect x="17.5" y="11.75" width="4.5" height="4.5" rx=".6"/><rect x="6" y="17.5" width="4.5" height="4.5" rx=".6"/><rect x="11.75" y="17.5" width="4.5" height="4.5" rx=".6"/><rect x="17.5" y="17.5" width="4.5" height="4.5" rx=".6"/></g><rect class="mark-open" x="12.35" y="12.35" width="3.3" height="3.3" rx=".4"/></svg><span class="wordmark">Auction France</span></a>
+    <nav class="mast-nav" aria-label="Principale">
+      <a class="nav-sales" href="/">Ventes</a>
+      <a href="/about.html" aria-current="page">Méthode</a>
+    </nav>
+    <p class="mast-note mono">Gratuit · indépendant des maisons de vente</p>
+    <div class="lang" role="group" aria-label="Langue du site">
+      <a href="/about.html" lang="fr" hreflang="fr" aria-label="Français" aria-current="true">FR</a>
+      <a href="/en/" lang="en" hreflang="en" aria-label="English">EN</a>
+    </div>
+  </div>
+  <div class="wrap page-head">
+    <p class="lbl eyebrow">Méthode</p>
+    <h1 class="page-title">Comment nous préparons chaque fiche</h1>
+    <p class="lede">Auction France est un second avis indépendant pour préparer une vente aux enchères de voitures. Il ne remplace ni l’annonce de la maison de vente ni l’examen du véhicule.</p>
+    <p class="lede-note mono" lang="en">The method page is in French for now. The English pages link here “(in French)”.</p>
+  </div>
+</header>
+<main id="main" class="wrap method" tabindex="-1">
+  <nav class="toc" aria-label="Sur cette page">
+    <p class="lbl">Sur cette page</p>
+    <ul>
+      <li><a href="#couverture">Ce que nous couvrons</a></li>
+      <li><a href="#note">La note et ses couleurs</a></li>
+      <li><a href="#ct">La grille du contrôle technique</a></li>
+      <li><a href="#moteurs">Les moteurs à risque</a></li>
+      <li><a href="#cout">Le coût estimé</a></li>
+      <li><a href="#simulateur">Simuler mon enchère</a></li>
+      <li><a href="#ia">L’avis IA</a></li>
+      <li><a href="#verifier">À vérifier avant d’enchérir</a></li>
+      <li><a href="#donnees">Données et limites</a></li>
+      <li><a href="#glossaire">Glossaire français-anglais</a></li>
+    </ul>
+  </nav>
+  <div class="prose">
+    <h2 id="couverture">Ce que nous couvrons</h2>
+    <p id="sources">Aujourd’hui, une seule vente&nbsp;: la vente du lundi de la salle Alcopa de Beauvais, voitures particulières. Chaque semaine, un programme lit le catalogue public de la vente, la fiche de chaque lot et les documents publiés avec&nbsp;: le procès-verbal du contrôle technique, toujours, et le certificat batterie pour les hybrides et les électriques. Les carnets d’entretien ne sont pas lus. L’analyse est publiée le jeudi soir et le samedi matin (heure de Paris), avant la vente.</p>
+    <p>D’autres salles et d’autres maisons de vente s’ajouteront seulement quand leurs données seront fiables. La page ne cite jamais une vente que nous ne lisons pas.</p>
+
+    <h2 id="note">La note et ses couleurs</h2>
+    <p>Une note de 0 à 100, calculée par des règles fixes. Elle combine trois parties&nbsp;: fiabilité 35&nbsp;%, état 35&nbsp;% et prix 30&nbsp;%.</p>
+    <ul>
+      <li>La fiabilité tient compte de l’âge, du kilométrage, du kilométrage par an et d’une courte liste de moteurs à risque connus (voir plus bas). Elle n’utilise ni avis de propriétaires ni statistiques de pannes.</li>
+      <li>L’état vient du contrôle technique (résultat et défaillances), de la garantie, des dommages de carrosserie relevés par la maison de vente, de la santé de la batterie et des mentions de l’annonce.</li>
+      <li>Le prix compare le coût estimé à celui des voitures semblables en vente que nous suivons (même modèle, années et kilométrages proches&nbsp;; à défaut, même marque et même carburant). Ce ne sont pas des prix de vente&nbsp;: nous n’en avons pas. Avec trop peu de voitures semblables, cette partie compte pour 50, une valeur neutre, et la fiche la montre hachurée, «&nbsp;non comparé&nbsp;».</li>
+    </ul>
+    <p>Selon nos critères, un lot a un profil «&nbsp;favorable&nbsp;» à partir de 80, «&nbsp;correct&nbsp;» à partir de 60, et présente un «&nbsp;risque élevé&nbsp;» en dessous. L’anneau autour de la note nuance ces trois profils par sa couleur&nbsp;:</p>
+    <ul class="bands">
+      <li><span class="band-dot dot-green" aria-hidden="true"></span>vert dès 80&nbsp;: profil favorable&nbsp;;</li>
+      <li><span class="band-dot dot-yellow" aria-hidden="true"></span>jaune moutarde de 70 à 79&nbsp;: profil correct&nbsp;;</li>
+      <li><span class="band-dot dot-orange" aria-hidden="true"></span>orange de 60 à 69&nbsp;: profil correct aussi, plus près du seuil&nbsp;;</li>
+      <li><span class="band-dot dot-red" aria-hidden="true"></span>rouge sous 60&nbsp;: risque élevé.</li>
+    </ul>
+    <p>Le jaune et l’orange sont une gradation visuelle, pas un quatrième profil. La note et le mot du profil sont toujours écrits&nbsp;: la couleur n’est jamais le seul repère.</p>
+    <p>Certains défauts plafonnent la note quelle que soit la somme&nbsp;: une défaillance critique au contrôle technique, une défaillance majeure au freinage, à la direction ou au châssis et à la carrosserie, un moteur à risque connu, une mention comme «&nbsp;moteur HS&nbsp;» ou «&nbsp;kilométrage non garanti&nbsp;». Tant qu’une donnée manque (mise à prix pas encore publiée, prix pas encore comparé, contrôle technique absent ou illisible, kilométrage inconnu ou non garanti), la note du lot reste sous 80&nbsp;; quand aucun lot de la vente n’a encore toutes ses données, la page affiche «&nbsp;Classement provisoire&nbsp;». Chaque fiche montre ce qui fait sa note, point par point, dans «&nbsp;Détail de la note&nbsp;».</p>
+
+    <h2 id="ct">La grille du contrôle technique</h2>
+    <p>Le procès-verbal classe chaque défaillance dans une des fonctions contrôlées. Chaque lot montre neuf cases, une par fonction, toujours dans le même ordre&nbsp;: 0 identification, 1 freinage, 2 direction, 3 visibilité, 4 feux et électricité, 5 essieux, roues, pneus et suspension, 6 châssis et carrosserie, 7 équipements, 8 nuisances. La pire défaillance de chaque fonction donne la couleur de sa case, de plus en plus marquée&nbsp;: neutre sans défaillance, grise pour une mineure, orange pour une majeure, rouge pour une critique&nbsp;; en pointillés quand le contrôle est absent ou illisible. Dans la fiche, chaque case l’écrit aussi en toutes lettres (RAS, mineure, majeure, critique). Les défaillances classées hors de ces neuf fonctions (par exemple «&nbsp;véhicule école&nbsp;») sont comptées dans la fiche, sans case.</p>
+    <ul class="sev-list">
+      <li><span class="sev sev-minor" aria-hidden="true"></span><span>Mineure&nbsp;: à surveiller, sans contre-visite.</span></li>
+      <li><span class="sev sev-major" aria-hidden="true"></span><span>Majeure&nbsp;: contre-visite obligatoire dans les deux mois.</span></li>
+      <li><span class="sev sev-critical" aria-hidden="true"></span><span>Critique&nbsp;: la voiture ne peut plus rouler après le jour du contrôle.</span></li>
+    </ul>
+    <p>La fiche reprend le résultat, la date, le kilométrage relevé, la validité et chaque défaillance avec son code et son libellé, repris du procès-verbal. Une voiture de moins de 4&nbsp;ans n’a pas encore de contrôle obligatoire&nbsp;; quand un contrôle volontaire est publié, la fiche dit ce qu’il a trouvé et, s’il est défavorable, la voiture ne reçoit pas le bonus «&nbsp;CT pas encore exigé&nbsp;». Quand le procès-verbal est un scan sans texte ou que sa lecture est incertaine, la fiche le dit et la note ne s’y fie pas.</p>
+    <h3>Carrosserie et batterie</h3>
+    <p>Les dommages de carrosserie sont ceux relevés par la maison de vente (zone et nature, sans les photos)&nbsp;; quand ils ne sont pas relevés, la fiche renvoie aux photos de l’annonce. Pour les voitures électriques et hybrides rechargeables, la santé de la batterie vient de l’annonce ou du certificat batterie publié&nbsp;; une batterie sous 75&nbsp;% classe la voiture en risque élevé, sauf en location.</p>
+
+    <h2 id="moteurs">Les moteurs à risque</h2>
+    <p>Notre liste suit trois moteurs à ce jour, chacun avec ses sources et la question à poser&nbsp;:</p>
+    <ul>
+      <li><strong>1.2 PureTech turbo</strong> (Peugeot, Citroën, DS, Opel, Fiat, 2013 à 2022)&nbsp;: courroie de distribution «&nbsp;humide&nbsp;» qui se délite, consommation d’huile. Demandez une facture de remplacement de la courroie et vérifiez si la garantie couvre la distribution.</li>
+      <li><strong>1.5 BlueHDi (DV5)</strong> (2017 à 2023)&nbsp;: la chaîne qui relie les arbres à cames peut s’allonger puis casser. Demandez une facture de contrôle ou de remplacement de la chaîne, et si la prise en charge du constructeur couvre le véhicule.</li>
+      <li><strong>1.2 TCe (H5Ft)</strong> (Renault, Dacia, Nissan)&nbsp;: surconsommation d’huile sur les moteurs produits d’octobre 2012 à juillet 2016. Nous signalons les voitures de 2012 à 2016, l’année de la voiture étant la seule date connue&nbsp;: vérifiez la date de production. Demandez l’historique d’entretien et toute facture liée.</li>
+    </ul>
+    <p>Le moteur est reconnu d’après la version écrite dans l’annonce («&nbsp;PURETECH 130CH&nbsp;»), la cylindrée, le carburant et l’année. Un moteur absent de cette liste n’est pas pour autant sans risque&nbsp;: la liste est courte, et la fiche le rappelle.</p>
+
+    <h2 id="cout">Le coût estimé</h2>
+    <p>Le coût estimé additionne&nbsp;:</p>
+    <ul>
+      <li>la mise à prix&nbsp;; quand aucune mise à prix n’est publiée, le prix affiché par la maison de vente&nbsp;; quand une enchère dépasse déjà la mise à prix, l’enchère actuelle (la fiche dit lequel)&nbsp;;</li>
+      <li>les frais acheteur de la vente, publiés avec l’analyse&nbsp;: aujourd’hui 14,4&nbsp;% TTC, au moins 360&nbsp;€ en salle, d’après une lecture des conditions générales d’Alcopa faite par un tiers (confiance moyenne)&nbsp;; en ligne, le prix affiché comprend déjà les frais. Vérifiez les conditions en vigueur, qui font foi&nbsp;;</li>
+      <li>la TVA de 20&nbsp;% quand le véhicule est vendu hors taxes et qu’un particulier ne peut pas la récupérer&nbsp;;</li>
+      <li>les réparations demandées par le contrôle technique&nbsp;: un forfait par défaillance majeure ou critique, selon la fonction touchée. Les défaillances mineures ne sont pas comptées. Ce n’est pas un devis&nbsp;;</li>
+      <li>80&nbsp;€ pour un nouveau contrôle technique quand il faudra le refaire avant une revente à un particulier.</li>
+    </ul>
+    <p>Ne sont pas compris&nbsp;: les frais fixes par lot, le transport, la carte grise et les réparations que le contrôle technique ne relève pas.</p>
+
+    <h2 id="simulateur">Simuler mon enchère</h2>
+    <p>Chaque fiche détaillée propose un calcul sur vos propres chiffres&nbsp;: «&nbsp;si j’enchéris jusqu’à tant, je paierai environ&nbsp;», et «&nbsp;si mon budget total est tant, j’enchéris au plus&nbsp;». Il applique les mêmes frais, la même TVA et les mêmes réparations que le coût estimé, et arrondit l’enchère possible à l’euro inférieur. Quand les frais dépassent leur minimum, il indique aussi combien 100&nbsp;€ d’enchère en plus ajoutent au total.</p>
+    <p>Ce n’est pas une estimation de la voiture ni un plafond que nous recommandons&nbsp;: sans prix de vente de référence, nous ne disons pas jusqu’où enchérir. Le pas d’enchère de la salle n’est pas connu.</p>
+
+    <h2 id="ia">L’avis IA</h2>
+    <p>Quand il est activé, un modèle d’IA relit chaque fiche détaillée avant la publication&nbsp;: caractéristiques, contrôle technique, dommages relevés, santé de la batterie, garantie et mentions de l’annonce (sans liens, montants, numéros de téléphone ni adresses e-mail). Il ne voit jamais le prix, le lien de l’annonce, le numéro de série ni la plaque. Il ne consulte aucune source pendant la relecture&nbsp;: il s’appuie sur ses connaissances générales, qui peuvent être fausses ou datées.</p>
+    <p>Il rédige un avis court et peut ajuster la note de −15 à +5 points, seulement pour une voiture aux données complètes, sans défaut qui plafonne sa note, proche d’un seuil et vendue dans les sept jours. Le reste de la note vient des règles, et la fiche indique tout ajustement. L’avis peut se tromper&nbsp;: c’est un second regard, pas une expertise. Quand une publication ou un lot n’a pas d’avis IA, la page le dit.</p>
+
+    <h2 id="verifier">À vérifier avant d’enchérir</h2>
+    <p>Les enchères, les conditions de vente et les frais sont ceux de la maison de vente&nbsp;: ouvrez toujours l’annonce d’origine depuis la fiche. Avant d’enchérir, vérifiez notamment&nbsp;:</p>
+    <ul>
+      <li>l’annonce et ses photos, et le procès-verbal du contrôle technique en entier&nbsp;;</li>
+      <li>les conditions de vente et les frais de la maison de vente&nbsp;;</li>
+      <li>les papiers&nbsp;: carte grise, historique d’entretien, garantie (durée et couverture)&nbsp;;</li>
+      <li>le véhicule lui-même, quand la maison de vente permet de le voir avant la vente&nbsp;;</li>
+      <li>les modalités d’enchère, de paiement et de retrait.</li>
+    </ul>
+
+    <h2 id="donnees">Données et limites</h2>
+    <p>Pas de photos, pas de numéro de série, pas de plaque d’immatriculation, pas de commentaires bruts du vendeur. Chaque fiche renvoie vers l’annonce d’origine. La page ne dépose aucun cookie elle-même (l’accès, réservé aux personnes invitées, passe par Vercel, qui en utilise) et ne mesure pas l’audience. Elle garde dans votre navigateur la langue choisie et, le temps de l’onglet, les chiffres saisis dans le simulateur et vos filtres lors d’un changement de langue.</p>
+    <p>Un projet indépendant et non commercial, sans aucun lien avec Alcopa. Les notes sont des indications selon nos critères et ne constituent pas un conseil d’achat&nbsp;: vérifiez toujours l’annonce d’origine et le véhicule avant d’enchérir.</p>
+
+    <h2 id="glossaire">Glossaire français-anglais</h2>
+    <table class="glossary">
+      <thead><tr><th scope="col">Français</th><th scope="col" lang="en">English</th></tr></thead>
+      <tbody>
+        <tr><td>contrôle technique (CT)</td><td lang="en">French roadworthiness test (CT)</td></tr>
+        <tr><td>CT favorable / défavorable</td><td lang="en">CT passed / failed</td></tr>
+        <tr><td>défaillance mineure / majeure / critique</td><td lang="en">minor / major / critical defect</td></tr>
+        <tr><td>contre-visite</td><td lang="en">re-inspection</td></tr>
+        <tr><td>mise à prix</td><td lang="en">starting price</td></tr>
+        <tr><td>enchère actuelle / prix affiché</td><td lang="en">current bid / displayed price</td></tr>
+        <tr><td>frais acheteur</td><td lang="en">buyer’s premium</td></tr>
+        <tr><td>TVA non récupérable</td><td lang="en">non-recoverable VAT</td></tr>
+        <tr><td>coût total estimé</td><td lang="en">estimated total cost</td></tr>
+        <tr><td>profil favorable / correct / risque élevé</td><td lang="en">favourable / fair / high risk</td></tr>
+        <tr><td>À regarder d’abord</td><td lang="en">Look at these first</td></tr>
+        <tr><td>Voir l’annonce sur Alcopa</td><td lang="en">View the listing on Alcopa (in French)</td></tr>
+      </tbody>
+    </table>
+    <p><a href="/">Retour aux ventes</a></p>
+  </div>
+</main>
+<footer class="foot">
+  <div class="wrap">
+    <nav class="foot-nav" aria-label="Pages du site">
+      <ul>
+        <li><a href="/about.html" aria-current="page">Méthode</a></li>
+        <li class="soon" data-i18n="foot.legal">Mentions légales</li>
+        <li class="soon" data-i18n="foot.terms">Conditions d’utilisation</li>
+        <li class="soon" data-i18n="foot.privacy">Confidentialité</li>
+        <li class="soon" data-i18n="foot.contact">Contact</li>
+        <li class="soon-note mono" data-i18n="foot.soon">en préparation</li>
+      </ul>
+    </nav>
+    <p class="foot-indep">Auction France est un second avis indépendant et gratuit, sans lien avec Alcopa. Les annonces, les photos et les conditions de vente restent sur le site de la maison de vente. Analyse automatique&nbsp;: elle peut contenir des erreurs, vérifiez sur place avant d’enchérir.</p>
+  </div>
+</footer>
+</body>
+</html>

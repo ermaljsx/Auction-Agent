@@ -1,0 +1,6 @@
+# Guard for the Vercel CLI, which does not read .gitignore and does not skip .env.
+# The site is only the web/ folder: deploy it from inside web/ (or through Git with Root Directory = web).
+# If the CLI is ever run from this folder by mistake, nothing but web/ is uploaded:
+# never .env (API keys), data/ (database, identity key) or the test fixtures.
+/*
+!/web

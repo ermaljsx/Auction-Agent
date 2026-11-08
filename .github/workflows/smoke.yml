@@ -1,0 +1,56 @@
+# Phase 0 smoke test against the live site: robots.txt, this week's Beauvais sale, 3 lots, rules-only scoring.
+# About 10 polite requests. Logs are public (public repository): commands print counts only, never per-car lines.
+# No secrets: the AI review and the upload run on the owner's PC only (Alcopa refuses GitHub's servers),
+# so this public repository holds no API key or storage token.
+# Runs by hand ("Run workflow"), or on a push to the working branch whose commit message contains [smoke].
+# If the site blocks or challenges the runner, the crawler stops (it never tries to get around a block).
+name: Smoke test (live site)
+
+on:
+  workflow_dispatch:
+    inputs:
+      sale_url:
+        description: "Optional Alcopa sale URL (default: this week's Beauvais sale)"
+        required: false
+        default: ""
+  push:
+    branches: ["claude/relaxed-albattani-3w9fgh"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-site
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[smoke]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      AUCTION_AGENT_DATA_DIR: /tmp/auction-agent/data
+      AUCTION_AGENT_REPORTS_DIR: /tmp/auction-agent/reports
+      AUCTION_AGENT_ENV_FILE: /tmp/auction-agent/none.env
+      AUCTION_AGENT_USER_AGENT: "AuctionAgent/0.1 (personal research project; +https://github.com/ermaljsx/Auction-Agent)"
+      SALE_URL: ${{ github.event.inputs.sale_url }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Install
+        run: pip install -r requirements.txt
+      - name: Recon (robots.txt, this week's sale)
+        # Exit 3 (no sale resolved) is tolerated only when a sale URL was given by hand;
+        # a block (exit 2) always stops the job.
+        run: python -m auction_agent recon --room beauvais || { rc=$?; [ "$rc" -eq 3 ] && [ -n "$SALE_URL" ]; }
+      - name: Crawl 3 lots (first listing page only)
+        run: python -m auction_agent crawl --url "${SALE_URL:-/salle-de-vente-encheres/beauvais}" --pages 1 --limit 3 --quiet
+      - name: Score (rules only)
+        run: python -m auction_agent score --no-llm
+      - name: Summary
+        if: always()
+        run: python -m auction_agent stats

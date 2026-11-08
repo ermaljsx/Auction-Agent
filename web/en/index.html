@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#121316" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0B0C0D" media="(prefers-color-scheme: dark)">
+<meta name="description" content="For every lot of the car auctions we cover: the French roadworthiness test (CT), known engine risks and the estimated total cost, before you bid." data-i18n-content="page.description">
+<title data-i18n="page.title">Car auctions in France – Auction France</title>
+<link rel="alternate" hreflang="fr" href="/">
+<link rel="alternate" hreflang="en" href="/en/">
+<link rel="preload" href="/fonts/archivo-latin-wdth-wght.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="stylesheet" href="/styles.css">
+<script src="/app.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#catalogue" data-i18n="skip">Skip to the lots</a>
+<header class="band">
+  <div class="wrap mast">
+    <a class="brand" href="/en/" aria-label="Auction France, home" data-i18n-label="brand.home"><svg class="mark" viewBox="0 0 28 28" width="28" height="28" aria-hidden="true" focusable="false"><rect class="mark-bg" width="28" height="28" rx="5"/><g class="mark-cells"><rect x="6" y="6" width="4.5" height="4.5" rx=".6"/><rect x="11.75" y="6" width="4.5" height="4.5" rx=".6"/><rect x="17.5" y="6" width="4.5" height="4.5" rx=".6"/><rect x="6" y="11.75" width="4.5" height="4.5" rx=".6"/><rect x="17.5" y="11.75" width="4.5" height="4.5" rx=".6"/><rect x="6" y="17.5" width="4.5" height="4.5" rx=".6"/><rect x="11.75" y="17.5" width="4.5" height="4.5" rx=".6"/><rect x="17.5" y="17.5" width="4.5" height="4.5" rx=".6"/></g><rect class="mark-open" x="12.35" y="12.35" width="3.3" height="3.3" rx=".4"/></svg><span class="wordmark">Auction France</span></a>
+    <nav class="mast-nav" aria-label="Main" data-i18n-label="nav.label">
+      <a class="nav-sales" href="/en/" aria-current="page" data-i18n="nav.sales">Sales</a>
+      <a href="/about.html" hreflang="fr" data-i18n="nav.method">Method</a>
+    </nav>
+    <p class="mast-note mono" data-i18n="mast.note">Free · independent of the auction houses</p>
+    <div class="lang" role="group" aria-label="Site language" data-i18n-label="lang.label">
+      <a id="lang-fr" href="/" lang="fr" hreflang="fr" aria-label="Français">FR</a>
+      <a id="lang-en" href="/en/" lang="en" hreflang="en" aria-label="English" aria-current="true">EN</a>
+    </div>
+  </div>
+  <div class="wrap hero">
+    <section class="hero-main" aria-labelledby="hero-title">
+      <p class="lbl eyebrow" data-i18n="hero.eyebrow">Car auctions · France</p>
+      <h1 id="hero-title" class="display"><span data-i18n="hero.t1">Auction cars, </span><span class="hl" data-i18n="hero.t2">decoded</span><span data-i18n="hero.t3"> before the sale.</span></h1>
+      <p class="lede lede-long" data-i18n="hero.lede">For every lot: what the French roadworthiness test (CT) says, known engine risks, and the real cost with fees. Then the official listing, in one click.</p>
+      <p class="lede lede-short" data-i18n="hero.lede_short">For every lot: what the French roadworthiness test (CT) says, known engine risks, and the real cost with fees.</p>
+      <form id="hero-search" class="hero-search" role="search" aria-label="Find a lot" data-i18n-label="hero.search_label">
+        <label class="hs-q"><span class="lbl hs-lbl" data-i18n="hero.q_label">Find a lot</span><svg class="ico-search" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="h-q" type="search" autocomplete="off" placeholder="Make, model or lot number" data-i18n-ph="hero.q_ph"></label>
+        <label class="hs-b"><span class="lbl hs-lbl" data-i18n="hero.budget_label">Max budget, total cost</span><input id="h-budget" type="text" inputmode="numeric" autocomplete="off" placeholder="No limit" data-i18n-ph="hero.budget_ph"></label>
+        <button class="btn-hi hs-go" type="submit"><span class="t-wide" data-i18n="hero.go">See the lots</span><span class="t-narrow" data-i18n="hero.go_short">Go</span></button>
+        <p id="h-budget-err" class="hs-err" role="alert" data-i18n="hero.budget_invalid" hidden>Budget in euros, for example 8000.</p>
+      </form>
+      <div id="toggles" class="toggles" role="group" aria-label="Shortcuts" data-i18n-label="hero.toggles" hidden>
+        <button type="button" class="chip" data-toggle="fav" aria-pressed="false"><svg class="ico-check" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path d="m5 12 5 5 9-10"/></svg><span data-i18n="toggle.fav">CT passed</span> <span class="fig chip-n" id="t-fav-n"></span></button>
+        <button type="button" class="chip" data-toggle="noengine" aria-pressed="false"><span data-i18n="toggle.noengine">No known engine risk</span></button>
+        <button type="button" class="chip" data-toggle="auto" aria-pressed="false"><span data-i18n="toggle.auto">Automatic gearbox</span></button>
+        <button type="button" class="chip" data-toggle="km100" aria-pressed="false"><span data-i18n="toggle.km100">Under 100,000 km</span></button>
+        <button type="button" class="chip" data-toggle="elec" aria-pressed="false"><span data-i18n="toggle.elec">Hybrid or electric</span></button>
+      </div>
+    </section>
+    <section id="sale" class="sale-card" aria-labelledby="sale-title">
+      <div class="sc-head"><span class="lbl" data-i18n="sale.next">Next sale analysed</span><span id="countdown" class="chip-hi" hidden></span></div>
+      <div class="sc-id">
+        <h2 id="sale-title" class="sc-title" data-i18n="state.loading_title">Loading the analysis…</h2>
+        <p id="sale-line" class="sc-line"></p>
+      </div>
+      <dl id="sale-figs" class="sc-figs" hidden>
+        <div><dt class="lbl" data-i18n="sale.lots">Lots</dt><dd class="fig" id="fig-lots"></dd></div>
+        <div><dt class="lbl" data-i18n="sale.read">CT reports read</dt><dd class="fig" id="fig-read"></dd></div>
+        <div><dt class="lbl" data-i18n="sale.fav">CT passed</dt><dd class="fig fig-ok" id="fig-fav"></dd></div>
+      </dl>
+      <p id="waffle-cap" class="sc-cap" data-i18n="sale.waffle_caption" hidden>Roadworthiness test result, one square per lot, in lot-number order.</p>
+      <div id="waffle" class="waffle" role="img" hidden></div>
+      <div id="stack" class="stack" aria-hidden="true" hidden></div>
+      <div id="legend" class="legend" role="group" aria-label="Filter by roadworthiness test result" data-i18n-label="legend.label" hidden></div>
+      <p id="legend-note" class="sc-note" data-i18n="legend.note" hidden>Major: re-inspection required within two months. Critical: the car may not be driven after the day of the test. Tap a colour to filter.</p>
+      <div id="sc-status" class="sc-status mono"></div>
+      <a id="sale-all" class="btn-line" href="#catalogue" hidden></a>
+      <ul id="sale-others" class="sc-others" hidden></ul>
+    </section>
+  </div>
+  <div id="coverage" class="wrap coverage" hidden>
+    <span class="lbl" data-i18n="cov.label">Sales covered</span>
+    <span id="cov-list" class="cov-list"></span>
+    <span class="cov-more" data-i18n="cov.more">More auction rooms will be added once their data is reliable.</span>
+    <a class="cov-link" href="/about.html#couverture" hreflang="fr" data-i18n="cov.link">What we cover (in French)</a>
+  </div>
+</header>
+<div id="banners" class="wrap banners"></div>
+<div id="catbar" class="catbar">
+  <div class="wrap">
+    <div class="cb-top">
+      <p id="bar-sale" class="cb-sale" hidden><span class="lbl" data-i18n="bar.sale">Sale</span> <span id="bar-sale-text" class="cb-sale-text"></span><label class="cb-sale-pick" hidden><span class="sr" data-i18n="bar.pick">Choose the sale</span><select id="bar-sale-select"></select></label></p>
+      <nav id="index" class="cb-index" aria-label="Catalogue sections" data-i18n-label="index.label" hidden><ul id="index-list"></ul></nav>
+    </div>
+    <form id="filters" class="cb-filters" role="search" aria-label="Filter the lots" data-i18n-label="filters.label" hidden>
+      <label class="f-q"><span class="sr" data-i18n="filters.q">Find a lot</span><svg class="ico-search" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="f-q" type="search" autocomplete="off" placeholder="Make, model, lot number" data-i18n-ph="filters.q_ph"></label>
+      <button type="button" id="f-toggle" class="ctl f-toggle" aria-controls="f-more" aria-expanded="false"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg><span data-i18n="filters.toggle">Filters</span> <span id="f-n" class="f-n"></span></button>
+      <div id="f-more" class="f-more">
+        <label class="f-sel"><span class="sr" data-i18n="filters.budget">Max budget (estimated total cost)</span><select id="f-budget"><option value="" data-i18n="filters.budget_any">Budget</option></select></label>
+        <label class="f-sel"><span class="sr" data-i18n="filters.fuel">Fuel</span><select id="f-fuel"><option value="" data-i18n="filters.fuel_any">Fuel</option><option value="elec" data-i18n="toggle.elec">Hybrid or electric</option></select></label>
+        <label class="f-sel"><span class="sr" data-i18n="filters.gearbox">Gearbox</span><select id="f-gearbox"><option value="" data-i18n="filters.gearbox_any">Gearbox</option></select></label>
+        <label class="f-sel"><span class="sr" data-i18n="filters.km">Mileage</span><select id="f-km"><option value="" data-i18n="filters.km_any">Mileage</option></select></label>
+        <label class="f-sel"><span class="sr" data-i18n="filters.year">Year</span><select id="f-year"><option value="" data-i18n="filters.year_any">Year</option></select></label>
+        <label class="f-sel"><span class="sr" data-i18n="filters.ct">Roadworthiness test</span><select id="f-ct"><option value="" data-i18n="filters.ct_any">Roadworthiness test</option><option value="fav" data-i18n="ct.fav">CT passed</option><option value="major" data-i18n="ct.major">Failed · major defect</option><option value="crit" data-i18n="ct.crit">Failed · critical defect</option><option value="none" data-i18n="ct.none">No CT or unreadable</option></select></label>
+        <label class="f-sel f-engine"><span class="sr" data-i18n="filters.engine">Engine</span><select id="f-engine"><option value="" data-i18n="filters.engine_any">Engine</option><option value="safe" data-i18n="toggle.noengine">No known engine risk</option></select></label>
+        <label class="f-sort"><span data-i18n="filters.sort">Sort by</span><select id="f-sort"><option value="score" data-i18n="sort.score">Score</option><option value="price" data-i18n="sort.price">Total cost, lowest first</option><option value="km" data-i18n="sort.km">Mileage</option><option value="year" data-i18n="sort.year">Year</option><option value="lot" data-i18n="sort.lot">Lot number</option></select></label>
+      </div>
+      <p id="count" class="f-count" role="status" aria-live="polite"></p>
+      <button type="reset" id="f-reset" class="link-btn f-reset" data-i18n="filters.reset" hidden>Clear all</button>
+    </form>
+  </div>
+</div>
+<div class="wrap layout">
+  <main id="catalogue" class="list" tabindex="-1" aria-busy="true">
+    <div id="state" class="state" hidden></div>
+    <section id="sec-top" class="section" aria-labelledby="h-top">
+      <div class="sec-head"><h2 id="h-top" tabindex="-1" data-i18n="sec.top">Look at these first</h2> <span id="n-top" class="fig sec-n"></span></div>
+      <p id="note-top" class="sec-note"></p>
+      <div class="thead lbl" aria-hidden="true"><span data-i18n="col.lot">Lot</span><span data-i18n="col.car">Vehicle</span><span class="c-ct" data-i18n="col.ct">Roadworthiness test</span><span class="c-cost" data-i18n="col.cost">Estimated total cost</span><span class="c-sc" data-i18n="col.score">Score</span></div>
+      <ul id="top-list" class="lots">
+        <li class="skel" aria-hidden="true"><span class="skel-tag"></span><span class="skel-bar"></span></li>
+        <li class="skel" aria-hidden="true"><span class="skel-tag"></span><span class="skel-bar"></span></li>
+        <li class="skel" aria-hidden="true"><span class="skel-tag"></span><span class="skel-bar"></span></li>
+      </ul>
+      <button type="button" id="more-top" class="btn-more" hidden></button>
+    </section>
+    <section id="sec-cards" class="section" aria-labelledby="h-cards" hidden>
+      <div class="sec-head"><h2 id="h-cards" tabindex="-1" data-i18n="sec.cards">Other detailed reports</h2> <span id="n-cards" class="fig sec-n"></span></div>
+      <p class="sec-note" data-i18n="sec.cards_note">The next lots in the ranking on our criteria.</p>
+      <div class="thead lbl" aria-hidden="true"><span data-i18n="col.lot">Lot</span><span data-i18n="col.car">Vehicle</span><span class="c-ct" data-i18n="col.ct">Roadworthiness test</span><span class="c-cost" data-i18n="col.cost">Estimated total cost</span><span class="c-sc" data-i18n="col.score">Score</span></div>
+      <ul id="cards-list" class="lots"></ul>
+      <button type="button" id="more-cards" class="btn-more" hidden></button>
+    </section>
+    <section id="sec-rest" class="section" aria-labelledby="h-rest" hidden>
+      <div class="sec-head"><h2 id="h-rest" tabindex="-1" data-i18n="sec.rest">Other lots</h2> <span id="n-rest" class="fig sec-n"></span></div>
+      <p id="note-rest" class="sec-note"></p>
+      <div class="thead lbl" aria-hidden="true"><span data-i18n="col.lot">Lot</span><span data-i18n="col.car">Vehicle</span><span class="c-ct" data-i18n="col.ct">Roadworthiness test</span><span class="c-cost" data-i18n="col.cost">Estimated total cost</span><span class="c-sc" data-i18n="col.score">Score</span></div>
+      <ul id="rest-list" class="lots lots-compact"></ul>
+      <button type="button" id="more-rest" class="btn-more" hidden></button>
+    </section>
+    <div id="no-match" class="no-match" hidden>
+      <h2 tabindex="-1" data-i18n="empty.title">No lot matches these filters</h2>
+      <p id="no-match-text"></p>
+      <p class="nm-actions"><button type="button" id="no-match-ct" class="btn-ghost" hidden></button> <button type="button" id="no-match-reset" class="btn-ghost" data-i18n="empty.reset">Clear all filters</button></p>
+    </div>
+  </main>
+  <aside id="sheet-pane" class="pane" aria-label="Lot report" data-i18n-label="pane.label">
+    <p class="pane-empty" data-i18n="pane.empty" hidden>Choose a lot to see its report.</p>
+  </aside>
+</div>
+<footer class="foot">
+  <div class="wrap">
+    <nav class="foot-nav" aria-label="Site pages" data-i18n-label="foot.label">
+      <ul>
+        <li><a href="/about.html" hreflang="fr" data-i18n="foot.method">Method (in French)</a></li>
+        <li class="soon" data-i18n="foot.legal">Legal notice</li>
+        <li class="soon" data-i18n="foot.terms">Terms of use</li>
+        <li class="soon" data-i18n="foot.privacy">Privacy</li>
+        <li class="soon" data-i18n="foot.contact">Contact</li>
+        <li class="soon-note mono" data-i18n="foot.soon">in preparation</li>
+      </ul>
+    </nav>
+    <p class="foot-indep" data-i18n="foot.indep">Auction France is a free, independent second opinion, not affiliated with Alcopa. Listings are in French on the auction house's site, with their photos and sale terms. Automatic analysis: it may contain errors, check on site before you bid.</p>
+    <p id="fees" class="foot-fees"></p>
+    <details id="status" class="status"><summary data-i18n="status.summary">Analysis details</summary><dl id="status-list" class="status-list"></dl></details>
+  </div>
+</footer>
+<div id="sheet-layer" class="sheet-layer" hidden></div>
+</body>
+</html>

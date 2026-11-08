@@ -1,0 +1,18 @@
+Certificat batterie
+Date du diagnostic : 05/08/2026 à 15:02 UTC
+Édition à jour disponible sur
+https://certificate.example.test/certificate Kia Niro PHEV
+s/c0000000004.pdf
+VIN : [VIN] Immat : [IMMAT]
+Date de mise en circulation : 10/10/2019
+Kilométrage : 120 400 km
+État de la batterie
+Comparaison du SOH avec des véhicules similaires en
+âge et kilométrage
+97%
+80% 20%
+État de Santé (SOH) (1)
+Capacité utile restante / Capacité utile neuve (2) 7,44 kWh / 8,9 kWh
+Garantie constructeur
+SOH supérieur à 70%, pendant 7 ans ou 150 000 km.
+Texte d'exemple : autonomies calculées avec le modèle de consommation Moba.

@@ -1,0 +1,51 @@
+ZA99001101
+Contrôle technique périodique 05/11/2026 26991101
+Défavorable pour défaillances majeures
+DEFAILLANCES MAJEURES :
+4.4.1.a.2. ÉTAT ET FONCTIONNEMENT (INDICATEURS DE DIRECTION ET FEUX DE SIGNAL
+04/01/2027 DE DÉTRESSE) : Source lumineuse défectueuse ou manquante (ARD)
+8.2.12.d.2. ÉMISSIONS GAZEUSES : Le relevé du système OBD indique
+Contre-visite un dysfonctionnement important
+Code(s) défaut(s) standard(s) relevé(s) concernant le dispositif antipollution : P0401 P0420
+S099Y003 P2002
+DEFAILLANCES MINEURES :
+4.2.1.a.1. ÉTAT ET FONCTIONNEMENT (FEUX DE POSITION AVANT, ARRIÈRE
+ET LATÉRAUX, FEUX DE GABARIT, FEUX D'ENCOMBREMENT ET FEUX DE JOUR)
+: Source lumineuse partiellement défectueuse (AVG)
+4.7.1.b.1. ÉTAT ET FONCTIONNEMENT (DISPOSITIF D'ÉCLAIRAGE DE LA
+AUTOBILAN FICTIF 99 PLAQUE D'IMMATRICULATION ARRIÈRE) : Source lumineuse partiellement
+défectueuse (AR)
+3 RUE DES ESSAIS
+5.3.3.a.1. TUBES DE POUSSÉE, JAMBES DE FORCE, TRIANGLES ET BRAS DE
+99990 VILLE-TEST SUSPENSION : Détérioration d'un silentbloc de liaison au châssis ou
+Tel : 0199000000 à l'essieu (AVG, AVD)
+5.3.4.b.1. ROTULES DE SUSPENSION : Capuchon antipoussière détérioré
+RENAULT CLIO (AVD, AVG)
+8.2.12.e.1. ÉMISSIONS GAZEUSES : Connexion impossible sans
+dysfonctionnement du témoin
+099Y5679 OBD
+Kilométrages relevés lors des précédents contrôles techniques
+depuis le 20 mai 2018 :
+03/07/2019 : 52100km / 17/07/2021 : 61500km / 14/06/2023 :
+[IMMAT] (F) 12/07/2017 05/05/2009 70250km /
+[VIN] M1 VP Attention il existe une suite à cette page du procès verbal
+M10TESTVP000B07 GO
+Photocopie du certificat d'immatriculation visée par un
+commissaire-priseur ou un huissier de justice
+AVANT ARRIERE
+88800 G D G D
+Ripage (-8 à +8m/km) +0.3m/km
+CT : 04/01/2027 Feux de croisement (-2.5% à -0.5%) -1.1% -1.4%
+N° d'agrément : S099Y003 26991101
+ZA99001101
+
+ZA99001102
+Contrôle technique périodique 05/11/2026 26991101
+Défavorable pour défaillances majeures Suite du procès verbal
+04/06/2025 : 80100km / 24/02/2026 :
+84200km
+Afin de faciliter les campagnes de rappel « graves », vos données
+de contact ont été collectées.
+Attention ce procès verbal contient 2 pages
+N° d'agrément : S099Y003 26991101
+ZA99001102

@@ -1,0 +1,14 @@
+PROCÈS-VERBAL DE CONTRÔLE TECHNIQUE
+Nature du contrôle : Contrôle technique périodique
+Date du contrôle : 12/03/2026
+Immatriculation : AB-123-CD   N° d'identification : VF3ABCDEFGH123456
+Kilométrage relevé : 98 765 km
+Résultat : Favorable
+Légende des résultats : Favorable (A) / Défavorable pour défaillances majeures (S) / Défavorable pour défaillances critiques (R)
+DÉFAILLANCES MINEURES :
+5.2.3.a.1 Pneumatique : usure irrégulière
+4.1.1.b.1 Feu de croisement : réglage incorrect
+Les défaillances mineures ne donnent pas lieu à contre-visite.
+Centre AUTOSUR 12 rue de Paris 75001 PARIS
+Prochain contrôle avant le 11/03/2028
+Historique des relevés kilométriques : 10/03/2024 72 410 km ; 12/03/2026 98 765 km
